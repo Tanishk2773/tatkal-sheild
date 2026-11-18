@@ -1,10 +1,42 @@
-﻿# Tatkal Shield
+# Tatkal Shield
 
 ![An express train crosses the Tatkal Shield railway landscape](docs/arrival.gif)
 
 A college DevOps showcase about one passenger question: **Did my booking go through when the connection dropped?** Tatkal Shield lets a passenger hold a seat, confirm it, lose the acknowledgement and recover the original PNR.
 
 [Watch the DevOps film](frontend/jury/devops.mp4) · [Watch the passenger story](frontend/jury/tatkal-shield.mp4) · [View CI runs](https://github.com/Tanishk2773/tatkal-sheild/actions/workflows/booking.yml)
+
+## Run on your computer
+
+Install Git and Node.js 22.16 or newer (npm comes with Node.js). Use a GitHub account with access to this private repository. [Download Git](https://git-scm.com/downloads) · [Download Node.js](https://nodejs.org/en/download)
+
+**1. Get the project.** Open a terminal and run:
+
+```sh
+git clone https://github.com/Tanishk2773/tatkal-sheild.git
+cd tatkal-sheild
+```
+
+If you already have the project, open a terminal in the folder containing `package.json` and start at step 2.
+
+**2. Install dependencies and start the server.**
+
+```sh
+npm ci
+npm start
+```
+
+On Windows, if PowerShell blocks `npm.ps1`, use `npm.cmd ci` and `npm.cmd start`. The default demo runs with an in-memory database and serves the frontend and API together.
+
+**3. Open the app.** Keep the terminal running and use these links on the same computer:
+
+- [Booking app](http://127.0.0.1:3000/) — choose **Mumbai CSMT → Pune Junction** under **Try a demo route**, pick the train, and select a seat. You can create a passenger account when prompted.
+- [Jury presentation](http://127.0.0.1:3000/jury/) — open the walkthrough or play the narrated DevOps film.
+- [Health check](http://127.0.0.1:3000/api/health) — the default demo returns `"status":"ok"` and `"storage":"demo-memory"`.
+
+Press **Ctrl+C** in the terminal to stop the server. Run `npm start` from the same folder to start it again. Restarting clears demo accounts and tickets. For persistent storage, copy [.env.example](.env.example) to `.env`, set `DATABASE_URL` to an existing PostgreSQL database, and restart.
+
+**If port 3000 is busy**, set `PORT=3010` in the project's `.env` file, restart, and use the address printed in the terminal. [Booking app on port 3010](http://127.0.0.1:3010/)
 
 ## Try the jury demonstration
 
@@ -46,18 +78,16 @@ The PostgreSQL check races two passengers for one seat and retries the winning c
 
 The [Render Blueprint](render.yaml) defines a Docker web service, an internal PostgreSQL connection, HTTPS session cookies and an HTTP readiness probe. Both resources request the free plan. Render requires access to this private repository before provisioning. [Deploy to Render](https://render.com/deploy?repo=https://github.com/Tanishk2773/tatkal-sheild)
 
-## Development
+## Development checks
 
-Use Node.js 22 or newer.
+After installing dependencies, run the syntax checks and automated booking tests from the project folder.
 
 ```sh
-npm ci
 npm run check
 npm test
-npm start
 ```
 
-Express serves the app and API together. Set `DATABASE_URL` for persistent PostgreSQL. With no database URL the app uses pg-mem and resets accounts and bookings on restart. See [.env.example](.env.example) for the local configuration.
+## Project layout
 
 | Directory | Contents |
 | --- | --- |
