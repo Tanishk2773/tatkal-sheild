@@ -1,0 +1,68 @@
+name: Booking CI and delivery
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: ci_only
+          POSTGRES_DB: booking_ci
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      CI_DATABASE_URL: postgres://postgres:ci_only@localhost:5432/booking_ci
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - name: Check concurrent booking and retry on PostgreSQL
+        run: node backend/ci/postgres.js
+      - name: Build the release candidate
+        run: docker build -t tatkal-shield:candidate .
+      - name: Deploy to temporary staging and check service readiness
+        run: |
+          docker run -d --name booking-stage --network host -e HOST=127.0.0.1 -e DATABASE_URL="$CI_DATABASE_URL" tatkal-shield:candidate
+          curl --retry 12 --retry-delay 1 --retry-connrefused --fail http://localhost:3000/api/health | jq -e '.status=="ok" and .storage=="postgres"'
+          curl --fail --silent http://localhost:3000/ > /dev/null
+      - name: Export tested image for delivery
+        if: github.event_name == 'push'
+        run: docker save tatkal-shield:candidate | gzip > /tmp/booking-image.tar.gz
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'push'
+        with:
+          name: tested-image
+          path: /tmp/booking-image.tar.gz
+          retention-days: 1
+  deliver:
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: tested-image
+      - name: Deliver verified commit to GitHub Container Registry
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          docker load -i booking-image.tar.gz
+          image="ghcr.io/${GITHUB_REPOSITORY,,}:$GITHUB_SHA"
+          docker tag tatkal-shield:candidate "$image"
+          echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker push "$image"

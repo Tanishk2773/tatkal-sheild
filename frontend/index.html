@@ -1,0 +1,183 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#18332e">
+  <meta name="description" content="Tatkal Shield — a mock train booking reliability project.">
+  <title>Tatkal Shield · Book a journey</title>
+  <link rel="stylesheet" href="/css/styles.css?v=7">
+  <script src="/js/app.js?v=7" type="module"></script>
+  <script type="module" src="/js/arrival.js"></script>
+  <script type="module" src="/js/motion.js?motion=2"></script>
+  <script type="module" src="/js/train-model.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Tatkal Shield home"><span class="brand-mark" aria-hidden="true">TS</span><span>TATKAL<span class="brand-light"> SHIELD</span></span></a>
+    <nav><a href="#journey">Plan a journey</a><a href="#guide">Passenger guide</a><a href="#operations">Operations lab</a></nav>
+    <button id="passenger-open" class="account-trigger" type="button">Passenger sign in</button>
+  </header>
+  <dialog id="passenger-dialog" class="account-dialog" aria-labelledby="account-title">
+    <header><h2 id="account-title">Passenger sign in</h2><form method="dialog"><button aria-label="Close passenger panel">×</button></form></header>
+    <form id="passenger-form">
+      <label id="passenger-name-field" hidden>Full name<input id="passenger-name" name="name" autocomplete="name" maxlength="80"></label>
+      <label>Email<input name="email" type="email" autocomplete="email" maxlength="254" required></label>
+      <label>Password<input id="passenger-password" name="password" type="password" autocomplete="current-password" minlength="10" maxlength="128" required></label>
+      <button id="passenger-submit" class="primary-button" type="submit">Sign in</button>
+      <button id="passenger-switch" class="text-button" type="button">Create a passenger account</button>
+    </form>
+    <div id="passenger-profile" hidden>
+      <p id="passenger-email"></p>
+      <h3>My tickets</h3>
+      <ul id="passenger-tickets"></ul>
+      <button id="passenger-logout" class="primary-button" type="button">Sign out</button>
+    </div>
+    <p id="passenger-status" role="status"></p>
+  </dialog>
+  <main>
+    <section class="intro">
+      <div class="hero-map" aria-hidden="true"><i></i><i></i><i></i><b></b></div>
+      <div class="hero-copy"><p class="eyebrow">INDIAN RAILWAY BOOKING LAB</p>
+      <h1>Beat the<br><span>Tatkal rush.</span></h1>
+      <p class="intro-copy">Hold a seat through the rush. Recover your ticket when the connection drops.</p>
+      <a class="cta" href="#journey">Find my train &nbsp; &#8599;</a></div>
+      <figure class="poster"><canvas id="landscape" width="760" height="390" role="img" aria-label="An electric express arrives on a viaduct in the Western Ghats at sunset."></canvas>
+      <figcaption><span>WESTERN GHATS <b>/</b> DECCAN LINE</span><button id="replay" type="button">&#8635; Replay arrival</button></figcaption></figure>
+    </section>
+    <section id="journey" class="journey reveal" aria-labelledby="search-title">
+      <header><div><p class="eyebrow">JOURNEY PLANNER</p><h2 id="search-title">Where are you headed?</h2></div><span class="fare-type">Tatkal · Sleeper</span></header>
+      <form id="journey-form">
+        <label><span>From</span><input id="origin" list="rail-stations" autocomplete="off" placeholder="Station name or code" required></label>
+        <label><span>To</span><input id="destination" list="rail-stations" autocomplete="off" placeholder="Station name or code" required></label>
+        <label><span>Journey date · IST</span><input id="travel-date" type="date" required></label>
+        <button class="search-action" id="find-trains" type="submit">Search trains <span aria-hidden="true">→</span></button>
+      </form>
+      <datalist id="rail-stations"></datalist>
+      <p class="search-hint">Search selected Indian Railways stations by name or code. Seat availability comes from the Tatkal Shield demo.</p>
+      <div id="demo-routes" class="demo-routes" aria-label="Bookable demo routes"></div>
+      <p class="search-hint" id="schedule-hint">Loading the demo timetable…</p>
+      <button id="retry-timetable" class="text-button" type="button" hidden>Retry timetable</button>
+    </section>
+    <div class="request-rail" role="presentation"><i></i></div>
+    <div id="message" class="message" role="status" aria-live="polite" hidden></div>
+    <div id="booking" class="booking-layout" hidden>
+      <section class="panel trains-panel" aria-labelledby="trains-heading">
+        <div class="section-heading"><div><p class="eyebrow">SEARCH RESULTS</p><h2 tabindex="-1" id="trains-heading">Available trains</h2></div><span id="train-count" class="subtle"></span></div>
+        <div id="train-list" class="train-list" aria-label="Available demo trains"><p class="loading">Loading trains…</p></div>
+        <button id="reload" class="text-button" type="button">↻ Refresh availability</button>
+      </section>
+      <section class="panel seats-panel" hidden aria-labelledby="seats-heading" aria-busy="true">
+        <div class="section-heading"><div><p class="eyebrow">SEAT SELECTION</p><h2 tabindex="-1" id="seats-heading">Choose your seat</h2></div><span class="coach-badge">COACH S1</span></div>
+        <p id="journey-label" class="subtle">Choose a train to see its seats.</p>
+        <div class="legend"><span><i class="free-dot"></i>Available</span><span><i class="held-dot"></i>Held</span><span><i class="sold-dot"></i>Sold</span></div>
+        <div class="coach">
+          <div class="coach-end"><span>← ENGINE</span><span>EXIT →</span></div>
+          <div id="seat-grid" class="seat-grid" aria-label="Coach seats"></div>
+          <p class="coach-caption">WINDOW · AISLE · WINDOW</p>
+        </div>
+        <div id="hold-panel" class="hold-panel" hidden>
+          <div><span id="hold-caption" class="eyebrow">RESERVED FOR YOU</span><p>Seat <strong id="held-seat"></strong> <span id="expiry"> &middot; <span id="hold-timer" class="timer"></span> left</span></p></div>
+          <button id="confirm" class="primary-button" type="button">Confirm mock booking <span aria-hidden="true">→</span></button>
+        </div>
+        <p class="seat-help">Select an available seat to hold it for 5 minutes. Passenger sign-in is required to reserve a seat.</p>
+      </section>
+    </div>
+    <section id="ticket" class="ticket panel" aria-labelledby="ticket-title" tabindex="-1" hidden>
+      <div class="ticket-main"><p class="eyebrow">YOU'RE ALL ABOARD</p><h2 id="ticket-title">Booking confirmed.</h2><p id="ticket-route"></p><p id="ticket-departure" class="subtle"></p><p class="subtle">Mock ticket · No payment collected · Not valid for travel</p></div>
+      <div class="ticket-stub"><span class="confirmed">CONFIRMED</span><p class="eyebrow">DEMO PNR</p><strong id="ticket-pnr"></strong><p>COACH S1 · SEAT <strong id="ticket-seat"></strong></p></div>
+    </section>
+    <section id="guide" class="editorial reveal" aria-labelledby="guide-title">
+      <header class="editorial-heading">
+        <p class="eyebrow">PASSENGER GUIDE</p>
+        <h2 id="guide-title">From station to seat.</h2>
+      </header>
+      <ol class="journey-stops">
+        <li><h3>Find a departure</h3><p>Choose your stations and journey date. Each matching train shows its departure time in IST and how many seats are free.</p></li>
+        <li><h3>Hold your seat</h3><p>Pick an available seat from the coach map. The five-minute timer shows how long that seat is reserved for you.</p></li>
+        <li><h3>Collect your ticket</h3><p>Confirm your hold and collect a demo PNR. If the reply disappears, your browser can retrieve the confirmation.</p></li>
+      </ol>
+    </section>
+
+    <section class="model-section editorial reveal" aria-labelledby="model-title">
+      <header class="editorial-heading">
+        <p class="eyebrow">ON THE PLATFORM</p>
+        <h2 id="model-title">Watch the express arrive.</h2>
+      </header>
+      <div class="model-stage" role="img" aria-label="Three-dimensional model of an electric locomotive and two coaches on parallel rails.">
+        <div class="model-scenery" aria-hidden="true">
+          <span class="model-sun"></span><span class="model-cloud"></span><span class="model-cloud second-cloud"></span>
+          <span class="model-mountains"></span><span class="model-hills"></span>
+          <span class="model-trees"></span><span class="model-signal"></span>
+        </div>
+        <div class="model-world" aria-hidden="true">
+          <div class="model-track"></div>
+          <div class="model-consist"><div class="rail-car engine"><i class="rail-face near"></i><i class="rail-face far"></i><i class="rail-face roof"></i><i class="rail-face floor"></i><i class="rail-face nose"></i><i class="rail-face tail"></i></div><div class="rail-car coach-car first-car"><i class="rail-face near"></i><i class="rail-face far"></i><i class="rail-face roof"></i><i class="rail-face floor"></i><i class="rail-face nose"></i><i class="rail-face tail"></i></div><div class="rail-car coach-car second-car"><i class="rail-face near"></i><i class="rail-face far"></i><i class="rail-face roof"></i><i class="rail-face floor"></i><i class="rail-face nose"></i><i class="rail-face tail"></i></div></div>
+        </div>
+      </div>
+      <div class="model-controls">
+        <label for="model-angle">Viewing angle <input id="model-angle" type="range" min="-60" max="60" value="-24"></label>
+        <button class="primary-button" id="model-replay" type="button">↻ Replay 3D arrival</button>
+      </div>
+    </section>
+
+    <section id="operations" class="editorial reveal" aria-labelledby="operations-title">
+      <div class="recovery-board">
+        <header class="editorial-heading">
+          <p class="eyebrow">OPERATIONS LAB</p>
+          <h2 id="operations-title">The reply dropped.<br>The seat is still yours.</h2>
+          <p>Follow a lost confirmation from the first click to the recovered ticket, then try it on a booking.</p>
+          <a href="#drill">Go to the live drill <span aria-hidden="true">↓</span></a>
+        </header>
+        <div class="recovery-stops" aria-label="Confirmation recovery walkthrough">
+          <details name="recovery-story" open>
+            <summary><span>01</span> Booking committed</summary>
+            <p>The server validates the hold, writes the booking, and releases the hold in one transaction.</p>
+          </details>
+          <details name="recovery-story">
+            <summary><span>02</span> Confirmation reply lost</summary>
+            <p>The demo discards the successful reply in the browser. This tab keeps the confirmation details so it can retry after a reload.</p>
+          </details>
+          <details name="recovery-story">
+            <summary><span>03</span> Original PNR recovered</summary>
+            <p>The retry matches the original session and hold token. The server returns the stored PNR for the same seat.</p>
+          </details>
+        </div>
+      </div>
+      <div class="ops" aria-label="Booking service metrics">
+      <div><small>BOOKING SERVICE</small><strong>Operations lab</strong></div>
+      <div><small>HEALTH PROBE</small><strong id="health-time">&mdash;</strong></div>
+      <div><small>FREE SEATS</small><strong id="free-total">&mdash;</strong></div>
+      <div><small>ACTIVE HOLDS</small><strong id="held-total">&mdash;</strong></div>
+      </div>
+    <details id="drill" class="drill"><summary>Run a lost-confirmation drill</summary>
+      <p>Enable the fault, hold a seat, then confirm. The browser discards the successful reply once. Retrieve the confirmation to ask the service for the same ticket again.</p>
+      <label><input type="checkbox" id="drop-response"> Drop the next confirmation reply</label>
+      <output id="drill-result" aria-live="polite">Ready for a booking</output>
+      <a class="drill-link" href="#journey">Return to the journey planner ↑</a>
+    </details>
+    <div id="storage-notice" class="notice">Connecting to the booking service…</div>
+    </section>
+
+    <section id="questions" class="editorial passenger-questions reveal" aria-labelledby="questions-title">
+      <header class="editorial-heading">
+        <p class="eyebrow">BEFORE YOU BOOK</p>
+        <h2 id="questions-title">Good to know.</h2>
+      </header>
+      <div class="question-list">
+        <details><summary>What happens when my seat hold expires?</summary><p>The seat becomes available again. Choose an available seat to start a new hold.</p></details>
+        <details><summary>Which date should I use for the demo?</summary><p>The planner starts with the first date in the demo timetable. If a search comes up empty, check the scheduled date below the search fields.</p></details>
+        <details><summary>Can I travel using this PNR?</summary><p>Tatkal Shield issues mock tickets for the college showcase. For travel you need a ticket from an official booking channel.</p></details>
+      </div>
+    </section>
+    <section class="journey-end reveal" aria-labelledby="end-title">
+      <h2 id="end-title">Ready to pick a seat?</h2>
+      <a class="cta" href="#journey">Plan a journey ↑</a>
+    </section>
+  </main>
+  <footer><a href="/jury/">Jury presentation ↗</a><span>TATKAL SHIELD <span class="footer-dot">●</span> A reliability experiment</span><span>College DevOps showcase &middot; Mock railway network</span></footer>
+</body>
+</html>
+
+
+

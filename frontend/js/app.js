@@ -1,0 +1,524 @@
+import { resolveStation, stationLabel, stations } from './stations.js';
+
+// The server owns availability; the browser never invents sold seats.
+const $ = id => document.getElementById(id);
+const state = { trains: [], trainId: null, hold: null, busy: false, refreshing: false, seats: [] };
+let query = null;
+let pendingRequests = 0;
+let passenger = null;
+let registerMode = false;
+let resumeSeat = null;
+
+function restoreHold() {
+  if (!passenger || state.hold) return;
+  try {
+    const hold = JSON.parse(sessionStorage.getItem('tatkal-hold-' + passenger.id) || 'null');
+    if (hold && (hold.pending || Date.parse(hold.expiresAt) > Date.now())) {
+      state.hold = hold;
+      state.trainId = hold.trainId;
+    }
+  } catch { /* Storage is optional. */ }
+}
+
+function saveHold(hold) {
+  state.hold = hold;
+  if (!passenger) return;
+  try {
+    const key = 'tatkal-hold-' + passenger.id;
+    if (hold) sessionStorage.setItem(key, JSON.stringify(hold));
+    else sessionStorage.removeItem(key);
+  } catch { /* Booking still works if session storage is disabled. */ }
+}
+
+async function api(path, body) {
+  pendingRequests++;
+  document.body.classList.add('requesting');
+  try {
+    const response = await fetch('/api' + path, {
+      method: body ? 'POST' : 'GET',
+      headers: body ? { 'Content-Type': 'application/json' } : {},
+      body: body ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(10000)
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      const error = new Error(data.error || 'Request failed. Try again.');
+      error.status = response.status;
+      throw error;
+    }
+    return data;
+  } finally {
+    if (--pendingRequests === 0) document.body.classList.remove('requesting');
+  }
+}
+
+function message(text, success = false) {
+  $('message').textContent = text;
+  $('message').className = 'message' + (success ? ' success' : '');
+  $('message').hidden = false;
+}
+
+function departure(value) {
+  return new Intl.DateTimeFormat('en-IN', {
+    day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+    timeZone: 'Asia/Kolkata'
+  }).format(new Date(value)) + ' IST';
+}
+
+function element(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+const localDay = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit'
+});
+
+for (const station of stations) {
+  const [code, , ...aliases] = station;
+  $('rail-stations').append(new Option([code, ...aliases].join(' · '), stationLabel(station)));
+}
+
+function fillStation(field, name) {
+  const station = resolveStation(name);
+  field.value = station ? stationLabel(station) : name;
+  field.setCustomValidity('');
+}
+
+for (const id of ['origin', 'destination']) {
+  $(id).addEventListener('input', () => {
+    $('origin').setCustomValidity('');
+    $('destination').setCustomValidity('');
+  });
+}
+
+function renderDemoRoutes() {
+  const routes = new Map();
+  for (const train of state.trains) {
+    const route = train.source + ' → ' + train.destination;
+    if (!routes.has(route)) routes.set(route, train);
+  }
+  const buttons = [...routes].map(([route, train]) => {
+    const button = element('button', 'route-option', route);
+    button.type = 'button';
+    button.addEventListener('click', () => {
+      fillStation($('origin'), train.source);
+      fillStation($('destination'), train.destination);
+      $('travel-date').value = localDay.format(new Date(train.departure));
+      $('journey-form').requestSubmit();
+    });
+    return button;
+  });
+  $('demo-routes').replaceChildren(element('span', '', 'Try a demo route'), ...buttons);
+}
+
+function renderTrains() {
+  const locked = Boolean(state.hold) || state.busy;
+  $('find-trains').disabled = locked || !state.trains.length;
+  $('reload').disabled = state.busy;
+  for (const button of $('demo-routes').querySelectorAll('button')) button.disabled = locked;
+  $('booking').hidden = !query;
+  document.querySelector('.seats-panel').hidden = !state.trainId;
+  $('booking').classList.toggle('results-only', !state.trainId);
+  $('free-total').textContent = state.trains.reduce((sum, train) => sum + train.available, 0);
+  $('held-total').textContent = state.trains.reduce((sum, train) => sum + train.held, 0);
+  const matches = query ? state.trains.filter(train => train.source === query.source &&
+    train.destination === query.destination && localDay.format(new Date(train.departure)) === query.day) : [];
+  $('train-count').textContent = matches.length === 1 ? '1 service' : matches.length + ' services';
+  $('train-list').replaceChildren();
+  if (query && !matches.length) {
+    $('train-list').append(element('p', 'empty-result', 'No demo trains match this journey and date. Try a demo route above.'));
+  }
+  for (const train of matches) {
+    const button = element('button', 'train-card');
+    button.type = 'button';
+    button.setAttribute('aria-pressed', String(state.trainId === train.id));
+    button.disabled = state.busy;
+    button.append(
+      element('span', 'train-name', train.name),
+      element('span', 'train-route', train.source + ' → ' + train.destination),
+      element('span', 'train-departure', departure(train.departure))
+    );
+    const availability = element('span', 'train-availability');
+    availability.append(element('span', '', train.available + ' seats available'), element('span', 'subtle', train.total_seats + ' total'));
+    const track = element('span', 'availability-track');
+    const fill = element('span');
+    fill.style.width = (train.available / train.total_seats * 100) + '%';
+    track.append(fill);
+    button.append(availability, track, element('span', 'seat-link', state.trainId === train.id ? 'Viewing coach S1' : 'Choose seats →'));
+    button.addEventListener('click', async () => {
+      await selectTrain(train.id);
+      if (state.trainId === train.id) $('seats-heading').focus();
+    });
+    $('train-list').append(button);
+  }
+}
+
+function renderSeats() {
+  $('seat-grid').replaceChildren();
+  for (const seat of state.seats) {
+    const mine = state.hold?.trainId === state.trainId && state.hold?.seatNo === seat.seatNo && seat.status === 'held';
+    const button = element('button', 'seat ' + seat.status + (mine ? ' mine' : ''), String(seat.seatNo).padStart(2, '0'));
+    button.type = 'button';
+    button.disabled = seat.status !== 'free' || state.busy || Boolean(state.hold);
+    button.setAttribute('aria-label', 'Seat ' + seat.seatNo + ', ' + (mine ? 'held by you' : seat.status));
+    button.title = mine ? 'Your seat hold' : seat.status === 'free' ? 'Hold seat ' + seat.seatNo : seat.status;
+    button.addEventListener('click', () => holdSeat(seat.seatNo));
+    $('seat-grid').append(button);
+  }
+  document.querySelector('.seats-panel').setAttribute('aria-busy', String(state.busy));
+  renderHold();
+}
+
+function renderHold() {
+  const hold = state.hold;
+  $('hold-panel').hidden = !hold;
+  if (!hold) return;
+  $('held-seat').textContent = String(hold.seatNo).padStart(2, '0');
+  $('confirm').disabled = state.busy;
+  $('confirm').textContent = hold.pending ? 'Retrieve confirmation →' : 'Confirm mock booking →';
+  $('hold-caption').textContent = hold.pending ? 'CHECKING CONFIRMATION' : 'RESERVED FOR YOU';
+  $('expiry').hidden = Boolean(hold.pending);
+  const seconds = Math.max(0, Math.ceil((Date.parse(hold.expiresAt) - Date.now()) / 1000));
+  $('hold-timer').textContent = Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0');
+}
+
+async function loadSeats() {
+  if (!state.trainId) return;
+  const selectedId = state.trainId;
+  const data = await api('/trains/' + selectedId + '/seats');
+  if (selectedId !== state.trainId) return;
+  state.seats = data.seats;
+  $('journey-label').textContent = data.train.name + ' · ' + data.train.source + ' → ' + data.train.destination;
+  renderSeats();
+}
+
+async function selectTrain(id) {
+  if (state.busy) return;
+  if (state.hold && state.hold.trainId !== id) {
+    message('You have an active hold. Confirm it or wait for its five-minute expiry before changing trains.');
+    return;
+  }
+  state.trainId = id;
+  state.seats = [];
+  state.busy = true;
+  renderTrains();
+  renderSeats();
+  try {
+    await loadSeats();
+  } catch (error) {
+    message(error.message);
+  } finally {
+    state.busy = false;
+    renderTrains();
+    renderSeats();
+  }
+}
+
+async function refresh() {
+  if (state.busy || state.refreshing) return;
+  state.refreshing = true;
+  try {
+    const data = await api('/trains');
+    state.trains = data.trains;
+    renderTrains();
+    await loadSeats();
+  } finally {
+    state.refreshing = false;
+  }
+}
+
+async function holdSeat(seatNo) {
+  if (state.busy || state.hold) return;
+  if (!passenger) {
+    resumeSeat = { trainId: state.trainId, seatNo };
+    openPassenger();
+    return;
+  }
+  state.busy = true;
+  renderSeats();
+  renderTrains();
+  try {
+    const hold = await api('/seats/hold', { trainId: state.trainId, seatNo });
+    saveHold(hold);
+    message('Seat ' + seatNo + ' is held for you. Confirm within five minutes.', true);
+    await loadSeats();
+  } catch (error) {
+    if (error.status === 401) {
+      passenger = null;
+      resumeSeat = { trainId: state.trainId, seatNo };
+      openPassenger();
+    }
+    message(error.message);
+  } finally {
+    state.busy = false;
+    renderTrains();
+    renderSeats();
+    try { await refresh(); } catch { /* Keep the original result visible. */ }
+  }
+}
+
+$('confirm').addEventListener('click', async () => {
+  if (!state.hold || state.busy) return;
+  const hold = state.hold;
+  state.busy = true;
+  renderSeats();
+  renderTrains();
+  try {
+    saveHold({ ...hold, pending: true });
+    const { booking, train, recovered } = await api('/bookings/confirm', hold);
+    if (!hold.pending && $('drop-response').checked) {
+      $('drop-response').checked = false;
+      $('ticket').hidden = true;
+      message('Drill: the server committed the booking. Its reply was discarded. Retrieve the confirmation to recover your PNR.');
+      $('drill-result').textContent = 'Reply discarded · recovery pending';
+      return;
+    }
+    $('drill-result').textContent = recovered ? 'Receipt recovered · original PNR returned' : 'Receipt delivered · booking committed';
+    saveHold(null);
+    $('ticket-route').textContent = train.name + ' · ' + train.source + ' → ' + train.destination;
+    $('ticket-departure').textContent = departure(train.departure);
+    $('ticket-pnr').textContent = booking.pnr;
+    $('ticket-seat').textContent = String(booking.seat_no).padStart(2, '0');
+    $('ticket').hidden = false;
+    $('ticket').focus();
+    message('Booking confirmed. Your seat is now marked sold.', true);
+  } catch (error) {
+    if ([403, 409, 410].includes(error.status)) saveHold(null);
+    if (error.status === 401) {
+      state.hold = null;
+      passenger = null;
+      openPassenger();
+    }
+    message(error.message);
+  } finally {
+    state.busy = false;
+    renderTrains();
+    renderSeats();
+    try { await refresh(); } catch { /* Do not hide a successful booking. */ }
+  }
+});
+
+$('reload').addEventListener('click', async () => {
+  try { await boot(); } catch (error) { message(error.message); }
+});
+
+async function boot() {
+  await passengerReady;
+  const started = performance.now();
+  const health = await api('/health');
+  $('health-time').textContent = Math.round(performance.now() - started) + ' ms';
+  $('storage-notice').textContent = health.storage === 'demo-memory'
+    ? 'LOCAL DEMO · Bookings reset when the server restarts. This is an in-memory PostgreSQL emulator.'
+    : 'POSTGRESQL CONNECTED · Bookings are stored in your configured database.';
+  const data = await api('/trains');
+  state.trains = data.trains;
+  renderDemoRoutes();
+  const days = [...new Set(state.trains.map(train => localDay.format(new Date(train.departure))))].sort();
+  if (!$('travel-date').value) $('travel-date').value = days[0] || '';
+  $('schedule-hint').textContent = days.length
+    ? 'Demo timetable · ' + days.map(day => new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(day + 'T12:00:00Z'))).join(' / ')
+    : 'No scheduled departures.';
+  const restored = state.hold && state.trains.find(train => train.id === state.hold.trainId);
+  if (restored) {
+    query = { source: restored.source, destination: restored.destination, day: localDay.format(new Date(restored.departure)) };
+    fillStation($('origin'), query.source);
+    fillStation($('destination'), query.destination);
+    $('travel-date').value = query.day;
+  }
+  $('retry-timetable').hidden = true;
+  renderTrains();
+  if (state.trainId) await selectTrain(state.trainId);
+}
+
+setInterval(() => {
+  if (!state.hold) return;
+  if (!state.hold.pending && Date.parse(state.hold.expiresAt) <= Date.now() && !state.busy) {
+    saveHold(null);
+    renderSeats();
+    message('Your seat hold expired. Choose an available seat again.');
+    refresh().catch(error => message(error.message));
+  } else {
+    renderHold();
+  }
+}, 1000);
+
+setInterval(() => {
+  if (!document.hidden) refresh().catch(error => message('Availability refresh failed: ' + error.message));
+}, 5000);
+
+$('journey-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (state.hold || state.busy) return;
+  const origin = resolveStation($('origin').value);
+  const destination = resolveStation($('destination').value);
+  for (const [id, station] of [['origin', origin], ['destination', destination]]) {
+    if (!station) {
+      $(id).setCustomValidity('Choose a station from the suggestions or enter its exact code.');
+      $(id).reportValidity();
+      return;
+    }
+  }
+  if (origin[0] === destination[0]) {
+    $('destination').setCustomValidity('Choose a different arrival station.');
+    $('destination').reportValidity();
+    return;
+  }
+  fillStation($('origin'), origin[1]);
+  fillStation($('destination'), destination[1]);
+  const nextQuery = { source: origin[1], destination: destination[1], day: $('travel-date').value };
+  state.busy = true;
+  const searchButton = $('find-trains');
+  searchButton.setAttribute('aria-busy', 'true');
+  searchButton.textContent = 'Searching…';
+  const started = performance.now();
+  renderTrains();
+  try {
+    const data = await api('/trains');
+    // Let fast local responses finish the loading transition instead of flashing it.
+    if (matchMedia('(prefers-reduced-motion: no-preference)').matches) {
+      await new Promise(resolve => setTimeout(resolve, Math.max(0, 360 - (performance.now() - started))));
+    }
+    state.trains = data.trains;
+    query = nextQuery;
+    state.trainId = null;
+    state.seats = [];
+    $('ticket').hidden = true;
+    $('message').hidden = true;
+    renderSeats();
+    renderTrains();
+    $('trains-heading').focus();
+  } catch (error) {
+    message(error.message);
+  } finally {
+    state.busy = false;
+    searchButton.removeAttribute('aria-busy');
+    searchButton.textContent = 'Search trains →';
+    renderTrains();
+  }
+});
+
+$('retry-timetable').addEventListener('click', () => boot().catch(error => message(error.message)));
+
+function renderPassenger() {
+  $('passenger-open').textContent = passenger ? 'My account' : 'Passenger sign in';
+  $('passenger-form').hidden = Boolean(passenger);
+  $('passenger-profile').hidden = !passenger;
+  $('account-title').textContent = passenger ? passenger.name : registerMode ? 'Create passenger account' : 'Passenger sign in';
+  $('passenger-name-field').hidden = !registerMode;
+  $('passenger-name').required = registerMode;
+  $('passenger-password').autocomplete = registerMode ? 'new-password' : 'current-password';
+  $('passenger-submit').textContent = registerMode ? 'Create account' : 'Sign in';
+  $('passenger-switch').textContent = registerMode ? 'Already registered? Sign in' : 'Create a passenger account';
+  $('passenger-email').textContent = passenger?.email || '';
+}
+
+async function loadTickets() {
+  const list = $('passenger-tickets');
+  list.replaceChildren(element('li', 'subtle', 'Loading your tickets…'));
+  try {
+    const { tickets } = await api('/passenger/tickets');
+    list.replaceChildren(...tickets.map(ticket => element('li', '', ticket.pnr + ' · ' +
+      ticket.source + ' → ' + ticket.destination + ' · Seat ' + ticket.seat_no + ' · ' + departure(ticket.departure))));
+    if (!tickets.length) list.append(element('li', 'subtle', 'Your confirmed bookings will appear here.'));
+  } catch (error) {
+    list.replaceChildren(element('li', '', error.message));
+    if (error.status === 401) {
+      passenger = null;
+      state.hold = null;
+      $('ticket').hidden = true;
+      renderPassenger();
+      renderTrains();
+      renderSeats();
+    }
+  }
+}
+
+function openPassenger() {
+  renderPassenger();
+  $('passenger-status').textContent = '';
+  if (!$('passenger-dialog').open) $('passenger-dialog').showModal();
+  if (passenger) loadTickets();
+}
+
+$('passenger-open').addEventListener('click', () => {
+  resumeSeat = null;
+  openPassenger();
+});
+$('passenger-dialog').addEventListener('close', () => {
+  resumeSeat = null;
+  $('passenger-password').value = '';
+});
+$('passenger-switch').addEventListener('click', () => {
+  registerMode = !registerMode;
+  $('passenger-status').textContent = '';
+  renderPassenger();
+});
+$('passenger-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const button = $('passenger-submit');
+  if (button.disabled) return;
+  button.disabled = true;
+  $('passenger-switch').disabled = true;
+  $('passenger-status').textContent = 'Checking your account…';
+  try {
+    const data = Object.fromEntries(new FormData(event.currentTarget));
+    ({ passenger } = await api('/passenger/' + (registerMode ? 'register' : 'login'), data));
+    registerMode = false;
+    const target = resumeSeat;
+    $('passenger-form').reset();
+    renderPassenger();
+    $('passenger-status').textContent = '';
+    restoreHold();
+    if (state.hold || target) {
+      $('passenger-dialog').close();
+      if (state.hold) await boot();
+      else if (target.trainId === state.trainId) await holdSeat(target.seatNo);
+    } else {
+      await loadTickets();
+    }
+  } catch (error) {
+    $('passenger-status').textContent = error.message;
+  } finally {
+    button.disabled = false;
+    $('passenger-switch').disabled = false;
+  }
+});
+$('passenger-logout').addEventListener('click', async event => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    await api('/passenger/logout', {});
+    passenger = null;
+    state.hold = null;
+    $('ticket').hidden = true;
+    $('message').hidden = true;
+    $('passenger-tickets').replaceChildren();
+    renderPassenger();
+    renderTrains();
+    renderSeats();
+    $('passenger-dialog').close();
+  } catch (error) {
+    $('passenger-status').textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
+
+const passengerReady = api('/passenger').then(result => {
+  passenger = result.passenger;
+  restoreHold();
+  renderPassenger();
+}).catch(() => { /* The public timetable remains available. */ });
+
+boot().catch(error => {
+  $('retry-timetable').hidden = false;
+  $('schedule-hint').textContent = 'Could not load the timetable.';
+  document.querySelector('.seats-panel').setAttribute('aria-busy', 'false');
+  $('train-list').replaceChildren(element('p', 'loading', 'Could not load trains. Use Refresh availability to retry.'));
+  $('storage-notice').textContent = 'Booking service unavailable.';
+  message(error.message);
+});
+
