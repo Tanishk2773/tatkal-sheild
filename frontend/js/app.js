@@ -480,7 +480,9 @@ $('passenger-form').addEventListener('submit', async event => {
       await loadTickets();
     }
   } catch (error) {
-    $('passenger-status').textContent = error.message;
+    $('passenger-status').textContent = error.status === 404
+      ? 'This server is missing the sign-in route. Open the Local address printed by the current npm start command.'
+      : error.message;
   } finally {
     button.disabled = false;
     $('passenger-switch').disabled = false;

@@ -38,6 +38,8 @@ Press **Ctrl+C** in the terminal to stop the server. Run `npm start` from the sa
 
 **If port 3000 is busy**, set `PORT=3010` in the project's `.env` file, restart, and use the address printed in the terminal. [Booking app on port 3010](http://127.0.0.1:3010/)
 
+**If sign-in says “API endpoint not found”**, check [the passenger endpoint](http://127.0.0.1:3000/api/passenger) on the same port as the app. Before you sign in, the current server returns `{"passenger":null}`. A 404 usually means an older server is still listening on that port. Start the current checkout on another port or stop the old server if you no longer need its in-memory data. Open the **Local** address printed by the new process.
+
 ## Try the jury demonstration
 
 1. In the Operations Lab, enable **Drop the next confirmation reply**.
