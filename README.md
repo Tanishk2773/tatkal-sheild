@@ -1,109 +1,68 @@
-# Tatkal Shield
+﻿# Tatkal Shield
 
-> We broke the booking rush on purpose, so it won't break you.
+![An express train crosses the Tatkal Shield railway landscape](docs/arrival.gif)
 
-A self-contained **mock** train booking project. No real railway, payment, or personal data integration.
+A college DevOps showcase about one passenger question: **Did my booking go through when the connection dropped?** Tatkal Shield lets a passenger hold a seat, confirm it, lose the acknowledgement and recover the original PNR.
 
-## Current milestone: Phase 1
+[Watch the DevOps film](frontend/jury/devops.mp4) · [Watch the passenger story](frontend/jury/tatkal-shield.mp4) · [View CI runs](https://github.com/Tanishk2773/tatkal-sheild/actions/workflows/booking.yml)
 
-Implemented from [TATKAL_SHIELD_BUILD_GUIDE.md](TATKAL_SHIELD_BUILD_GUIDE.md):
+## Try the jury demonstration
 
-- Express API and a buildless HTML/CSS/JavaScript frontend.
-- PostgreSQL schema and three seeded fake trains.
-- Live seat availability, five-minute seat holds, mock confirmation, and a ticket PNR.
-- A database unique constraint on each train/seat.
-- HTTP integration checks covering the booking acceptance flow, ownership, expiry, and invalid input.
+1. In the Operations Lab, enable **Drop the next confirmation reply**.
+2. Search **CSMT → MAO** on the suggested demo date, choose a train and select an available seat.
+3. Create a passenger account or sign in. Confirm the five-minute hold.
+4. Refresh the same browser tab and choose **Retrieve confirmation**. Open **My account → My tickets** to see the PNR.
 
-Redis, Docker, CI/CD, queues, Kubernetes, load tests, monitoring, chaos controls, and animation are later phases. This milestone does **not** demonstrate 10,000-user capacity.
+## What the project contains
 
-## Run on this computer
+| Area | What you can do |
+| --- | --- |
+| Journey planner | Search 49 selected Indian railway stations by name, code or a supported alias. Three mock services supply the bookable inventory. |
+| Passenger accounts | Register, sign in, sign out and view your own ticket history. Passwords are salted and hashed with scrypt. The server validates the session cookie for booking requests. |
+| Coach and booking service | Inspect free, held and sold seats. Holds expire after five minutes. Transactions, ownership checks and a unique seat constraint protect confirmations. |
+| Recovery drill | Drop a successful response in the browser, reload and retry. A matching confirmation returns the existing PNR. |
+| Operations Lab | Inspect the health-probe response time, free seats and active holds. Follow an interactive explanation of the failure. |
+| Interface | Replay a train arrival, rotate the 3D train and explore a layered animated landscape. Reduced-motion support is included. |
+| Jury materials | The companion presentation is served at `/jury/`. Both narrated MP4 films are bundled with the app. |
 
-Node.js 22 or newer is required. In PowerShell:
+Station names and codes are reference data. Schedules, inventories and tickets are simulated. The project has no live RailOne booking integration.
 
-    cd "D:\tatkal shield"
-    npm.cmd install
-    npm.cmd start
+## How a change reaches staging
 
-Open **http://127.0.0.1:3000**. Stop with Ctrl+C. Dependencies are already installed if this project was just set up.
+```mermaid
+flowchart LR
+  A[Git commit] --> B[GitHub pull request]
+  B --> C[GitHub Actions]
+  C --> D[Booking tests]
+  D --> E[PostgreSQL seat contention test]
+  E --> F[Build Docker image]
+  F --> G[Temporary staging health check]
+  G --> H[Publish tested image on push to main]
+```
 
-With no DATABASE_URL, the app uses **pg-mem**, an in-memory PostgreSQL emulator. The screen explicitly labels this mode. All demo bookings reset when the process stops. This mode needs no PostgreSQL or Docker installation and is intended for learning and the Phase 1 functional check.
+The PostgreSQL check races two passengers for one seat and retries the winning confirmation. A successful push to `main` publishes the tested image to GitHub Container Registry with the commit SHA as its tag. Temporary staging lives for the duration of the Actions job. [Workflow](.github/workflows/booking.yml) · [Database test](backend/ci/postgres.js)
 
-For auto-restart while editing:
+## Hosting
 
-    npm.cmd run dev
+The [Render Blueprint](render.yaml) defines a Docker web service, an internal PostgreSQL connection, HTTPS session cookies and an HTTP readiness probe. Both resources request the free plan. Render requires access to this private repository before provisioning. [Deploy to Render](https://render.com/deploy?repo=https://github.com/Tanishk2773/tatkal-sheild)
 
-## Acceptance check
+## Development
 
-1. Pick one of the three fake trains.
-2. Select a green seat; it becomes amber and a five-minute hold timer appears.
-3. Click **Confirm mock booking**.
-4. Check the ticket PNR and see that the same seat is red (sold).
-5. Refresh the page; the sold seat remains sold until the demo server restarts.
-6. Open another tab to get a separate demo session and try an already held or sold seat.
+Use Node.js 22 or newer.
 
-A held seat is unavailable to others until confirmation or expiry. Reloading the original tab restores its hold. The UI keeps one active hold at a time; wait for expiry or confirm before switching trains.
+```sh
+npm ci
+npm run check
+npm test
+npm start
+```
 
-Run automated checks:
+Express serves the app and API together. Set `DATABASE_URL` for persistent PostgreSQL. With no database URL the app uses pg-mem and resets accounts and bookings on restart. See [.env.example](.env.example) for the local configuration.
 
-    npm.cmd test
-    npm.cmd run check
-
-The tests run against fresh emulator databases. They do not prove PostgreSQL transaction locking or rush-load capacity. The 500-request Redis concurrency acceptance test belongs to Phase 3.
-
-## Optional: persistent PostgreSQL
-
-PostgreSQL is not bundled. Install it separately if you want persistence. Keep using demo mode if you are just trying the app.
-
-1. Create an empty database named tatkal_shield using your PostgreSQL tools.
-2. Copy .env.example to .env:
-
-       Copy-Item .env.example .env
-
-3. Uncomment and edit DATABASE_URL in .env with your local database credentials.
-4. Restart with npm.cmd start.
-
-The server creates tables and inserts only missing seed trains. It does not reset existing trains or bookings. An invalid DATABASE_URL fails startup; it never silently switches to memory storage. .env is ignored by Git.
-
-Real PostgreSQL mutations use transactions and a train row lock. This simple Phase 1 approach favors clarity. Redis locking and distributed admission are planned later. The emulator does not implement real database locking or full rollback behavior, so use PostgreSQL for persistence and transaction validation.
-
-## Structure
-
-    frontend/
-      index.html                Booking page and mock ticket
-      css/styles.css            Responsive night-railway styling
-      js/app.js                 API calls, seat grid, hold timer
-    backend/
-      sql/schema.sql            Trains, holds, bookings, payments
-      src/server.js             Startup and graceful shutdown
-      src/app.js                Routes and input validation
-      src/db.js                 Storage selection and train seeding
-      src/services/booking.js   Hold and confirmation rules
-      tests/booking.test.js     HTTP and database integration tests
-
-## API
-
-All responses are JSON. IDs and seat numbers in request bodies must be positive integers.
-
-| Method | Endpoint | Purpose |
-| --- | --- | --- |
-| GET | /api/health | Service and storage status |
-| GET | /api/trains | Fake trains and availability counts |
-| GET | /api/trains/:id/seats | Free, held, and sold seats |
-| POST | /api/seats/hold | Hold a seat for 300 seconds |
-| POST | /api/bookings/confirm | Confirm a valid hold |
-
-Hold body:
-
-    { "trainId": 1, "seatNo": 1, "userId": "demo-alice" }
-
-Confirm body (use the holdToken returned above):
-
-    { "trainId": 1, "seatNo": 1, "userId": "demo-alice", "holdToken": "returned-token" }
-
-Responses use 201 for success, 400 for invalid input, 403 for a mismatched hold, 404 for a missing train, 409 for a taken seat, and 410 for an expired hold.
-
-The userId is a demo session identifier, not authentication. Seat listings never expose hold tokens. The app binds to 127.0.0.1 by default for local use.
-
-## Next milestone
-
-Phase 2 in the guide: Docker, Compose, Nginx, Redis service setup, and CI/CD.
+| Directory | Contents |
+| --- | --- |
+| [frontend](frontend/) | Booking UI, station directory, animations and [jury materials](frontend/jury/) |
+| [backend/src](backend/src/) | HTTP routes, passenger sessions and booking transactions |
+| [backend/sql](backend/sql/) | Database schema |
+| [backend/tests](backend/tests/) | HTTP acceptance, authorization and retry tests |
+| [.github/workflows](.github/workflows/) | CI, temporary staging and image delivery |

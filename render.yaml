@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: tatkal-sheild
+    runtime: docker
+    region: singapore
+    plan: free
+    healthCheckPath: /api/health
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: SECURE_COOKIES
+        value: "true"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: tatkal-sheild-db
+          property: connectionString
+databases:
+  - name: tatkal-sheild-db
+    region: singapore
+    plan: free
+    ipAllowList: []
