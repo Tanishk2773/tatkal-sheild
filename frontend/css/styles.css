@@ -624,3 +624,24 @@ body {
   color: #254938;
 }
 .route-option:hover:not(:disabled) { background: #dce9d8; }
+
+.saved-ticket > strong { display: inline-block; margin-right: 8px; }
+.saved-ticket-status { font-weight: 600; color: var(--green); }
+.saved-ticket details { margin-top: 6px; }
+.saved-ticket summary { cursor: pointer; padding: 4px 0; }
+.saved-ticket details p { margin: 4px 0; }
+.saved-ticket-actions, .seat-change-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.seat-change-form select {
+  display: block;
+  margin: 3px 0;
+  padding: 5px;
+  border: 1px solid #a8b6a1;
+  border-radius: 5px;
+  background: #f6f7ef;
+  color: #203e33;
+}

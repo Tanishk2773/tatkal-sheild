@@ -1,4 +1,4 @@
-﻿import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 import { BookingError } from './booking.js';
 
@@ -105,8 +105,8 @@ export function mountPassengers(app, pool, { secureCookies = false } = {}) {
 
   app.get('/api/passenger/tickets', requirePassenger, async (req, res) => {
     const { rows } = await pool.query(
-      'SELECT b.pnr, b.seat_no, t.name, t.source, t.destination, t.departure FROM bookings b JOIN trains t ON t.id = b.train_id WHERE b.user_id = $1 AND b.status = $2 ORDER BY b.id DESC',
-      [req.passenger.id, 'CONFIRMED']
+      'SELECT b.pnr, b.seat_no, b.status, b.train_id, t.name, t.source, t.destination, t.departure FROM bookings b JOIN trains t ON t.id = b.train_id WHERE b.user_id = $1 ORDER BY b.id DESC',
+      [req.passenger.id]
     );
     res.json({ tickets: rows });
   });

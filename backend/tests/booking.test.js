@@ -156,3 +156,39 @@ test('passenger sessions authenticate bookings and isolate ticket history', asyn
   assert.equal(login.status, 200);
   assert.equal((await send('/api/passenger/tickets', undefined, login.cookie)).body.tickets[0].pnr, confirmed.body.booking.pnr);
 });
+
+test('passenger can change and cancel their own ticket and free inventory', async t => {
+  const { send } = await setup(t);
+  const register = email => send('/api/passenger/register', {
+    name: 'Test Passenger', email, password: 'test-password-456'
+  });
+  const owner = await register('owner@example.test');
+  const other = await register('other@example.test');
+  const hold = await send('/api/seats/hold', { trainId: 1, seatNo: 6 }, owner.cookie);
+  const booking = await send('/api/bookings/confirm', hold.body, owner.cookie);
+  assert.equal(booking.status, 201);
+  const { pnr } = booking.body.booking;
+  const root = '/api/bookings/' + pnr;
+  assert.equal((await send(root + '/cancel', {}, other.cookie)).status, 404);
+  const competing = await send('/api/seats/hold', { trainId: 1, seatNo: 8 }, other.cookie);
+  assert.equal(competing.status, 201);
+  assert.equal((await send(root + '/change-seat', { seatNo: 8, expectedSeat: 6 }, owner.cookie)).status, 409);
+  const change = await send(root + '/change-seat', { seatNo: 7, expectedSeat: 6 }, owner.cookie);
+  assert.equal(change.status, 200);
+  assert.equal(change.body.ticket.pnr, pnr);
+  assert.equal(change.body.ticket.seat_no, 7);
+  assert.equal((await send(root + '/change-seat', { seatNo: 9, expectedSeat: 6 }, owner.cookie)).status, 409);
+  const seats = await send('/api/trains/1/seats');
+  assert.equal(seats.body.seats[5].status, 'free');
+  assert.equal(seats.body.seats[6].status, 'sold');
+  const retry = await send('/api/bookings/confirm', hold.body, owner.cookie);
+  assert.equal(retry.status, 200);
+  assert.equal(retry.body.booking.seat_no, 7);
+  assert.equal((await send(root + '/cancel', {}, owner.cookie)).body.ticket.status, 'CANCELLED');
+  assert.equal((await send(root + '/cancel', {}, owner.cookie)).status, 200);
+  const newHold = await send('/api/seats/hold', { trainId: 1, seatNo: 7 }, other.cookie);
+  assert.equal(newHold.status, 201);
+  assert.equal((await send('/api/bookings/confirm', newHold.body, other.cookie)).status, 201);
+  const history = await send('/api/passenger/tickets', undefined, owner.cookie);
+  assert.equal(history.body.tickets[0].status, 'CANCELLED');
+});

@@ -15,11 +15,13 @@ CREATE TABLE IF NOT EXISTS bookings (
   user_id TEXT NOT NULL,
   pnr TEXT UNIQUE NOT NULL,
   status TEXT NOT NULL CHECK (status IN ('CONFIRMED', 'CANCELLED')),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE (train_id, seat_no)
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS confirmation_key TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS bookings_confirmed_seat
+  ON bookings (train_id, seat_no) WHERE status = 'CONFIRMED';
+ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_train_id_seat_no_key;
 
 -- Temporary SQL holds make Phase 1 runnable without Redis.
 -- Redis atomic holds and their concurrency tests belong to Phase 3.

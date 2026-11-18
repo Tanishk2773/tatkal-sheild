@@ -278,6 +278,11 @@ $('confirm').addEventListener('click', async () => {
     }
     $('drill-result').textContent = recovered ? 'Receipt recovered · original PNR returned' : 'Receipt delivered · booking committed';
     saveHold(null);
+    if (booking.status === 'CANCELLED') {
+      $('ticket').hidden = true;
+      message('This booking was cancelled. You can view it under My tickets.');
+      return;
+    }
     $('ticket-route').textContent = train.name + ' · ' + train.source + ' → ' + train.destination;
     $('ticket-departure').textContent = departure(train.departure);
     $('ticket-pnr').textContent = booking.pnr;
@@ -415,13 +420,97 @@ function renderPassenger() {
   $('passenger-email').textContent = passenger?.email || '';
 }
 
-async function loadTickets() {
+function ticketCard(ticket) {
+  const item = element('li', 'saved-ticket');
+  const cancelled = ticket.status === 'CANCELLED';
+  const details = element('details');
+  details.append(element('summary', '', 'View ticket · ' + ticket.pnr));
+  details.append(
+    element('strong', '', ticket.name),
+    element('p', '', ticket.source + ' → ' + ticket.destination),
+    element('p', '', departure(ticket.departure)),
+    element('p', '', 'Coach S1 · Seat ' + ticket.seat_no + ' · ' + (cancelled ? 'Cancelled' : 'Confirmed'))
+  );
+  item.append(
+    element('strong', '', ticket.source + ' → ' + ticket.destination),
+    element('span', 'saved-ticket-status', cancelled ? 'Cancelled' : 'Confirmed'),
+    details
+  );
+  if (cancelled || !ticket.train_id) return item;
+
+  const actions = element('div', 'saved-ticket-actions');
+  const change = element('button', 'text-button', 'Change seat');
+  const cancel = element('button', 'text-button', 'Cancel ticket');
+  change.type = cancel.type = 'button';
+  actions.append(change, cancel);
+  const note = element('p', 'subtle');
+  note.setAttribute('role', 'status');
+  details.append(actions, note);
+
+  async function update(action, payload, feedback) {
+    for (const button of details.querySelectorAll('button')) button.disabled = true;
+    note.textContent = 'Updating ticket…';
+    try {
+      await api('/bookings/' + encodeURIComponent(ticket.pnr) + '/' + action, payload);
+      if ($('ticket-pnr').textContent === ticket.pnr) $('ticket').hidden = true;
+      await loadTickets(ticket.pnr);
+      $('passenger-status').textContent = feedback;
+      refresh().catch(() => { /* The ticket update already succeeded. */ });
+    } catch (error) {
+      note.textContent = error.message;
+    } finally {
+      for (const button of details.querySelectorAll('button')) button.disabled = false;
+    }
+  }
+
+  change.addEventListener('click', async () => {
+    change.disabled = true;
+    note.textContent = 'Looking for available seats…';
+    try {
+      const { seats } = await api('/trains/' + ticket.train_id + '/seats');
+      const free = seats.filter(seat => seat.status === 'free');
+      if (!free.length) {
+        note.textContent = 'There are no available seats on this service.';
+        return;
+      }
+      const form = element('form', 'seat-change-form');
+      const label = element('label', '', 'New seat · Coach S1');
+      const select = element('select');
+      select.append(...free.map(seat => new Option('Seat ' + seat.seatNo, seat.seatNo)));
+      label.append(select);
+      const save = element('button', 'primary-button', 'Save seat change');
+      form.append(label, save);
+      form.addEventListener('submit', event => {
+        event.preventDefault();
+        update('change-seat', { seatNo: Number(select.value), expectedSeat: ticket.seat_no }, 'Seat changed. Your PNR is the same.');
+      });
+      change.replaceWith(form);
+      select.focus();
+      note.textContent = '';
+    } catch (error) {
+      note.textContent = error.message;
+    } finally {
+      change.disabled = false;
+    }
+  });
+  cancel.addEventListener('click', () => {
+    if (window.confirm('Cancel demo ticket ' + ticket.pnr + ' and release seat ' + ticket.seat_no + '?')) {
+      update('cancel', {}, 'Ticket cancelled. The seat is available again.');
+    }
+  });
+  return item;
+}
+
+async function loadTickets(openPnr) {
   const list = $('passenger-tickets');
   list.replaceChildren(element('li', 'subtle', 'Loading your tickets…'));
   try {
     const { tickets } = await api('/passenger/tickets');
-    list.replaceChildren(...tickets.map(ticket => element('li', '', ticket.pnr + ' · ' +
-      ticket.source + ' → ' + ticket.destination + ' · Seat ' + ticket.seat_no + ' · ' + departure(ticket.departure))));
+    list.replaceChildren(...tickets.map(ticket => {
+      const item = ticketCard(ticket);
+      if (ticket.pnr === openPnr) item.querySelector('details').open = true;
+      return item;
+    }));
     if (!tickets.length) list.append(element('li', 'subtle', 'Your confirmed bookings will appear here.'));
   } catch (error) {
     list.replaceChildren(element('li', '', error.message));

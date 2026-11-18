@@ -56,6 +56,17 @@ export function createApp(database, options = {}) {
     const result = await service.confirmBooking(seatRequest(req.body, req.passenger.id, true));
     res.status(result.recovered ? 200 : 201).json(result);
   });
+  app.post('/api/bookings/:pnr/cancel', requirePassenger, async (req, res) => {
+    res.json({ ticket: await service.manageTicket({ pnr: req.params.pnr, userId: req.passenger.id }) });
+  });
+  app.post('/api/bookings/:pnr/change-seat', requirePassenger, async (req, res) => {
+    res.json({ ticket: await service.manageTicket({
+      pnr: req.params.pnr,
+      userId: req.passenger.id,
+      seatNo: positiveInteger(req.body?.seatNo, 'seatNo'),
+      expectedSeat: positiveInteger(req.body?.expectedSeat, 'expectedSeat')
+    }) });
+  });
   app.use('/api', (_req, res) => res.status(404).json({ error: 'API endpoint not found.' }));
   app.use(express.static(fileURLToPath(new URL('../../frontend/', import.meta.url))));
   app.use((error, _req, res, _next) => {

@@ -75,16 +75,21 @@ export function createBookingService(pool, { holdSeconds = 300, now = () => Date
     return { train, seats };
   }
 
+  async function isSold(client, trainId, seatNo) {
+    const { rows } = await client.query(
+      "SELECT id FROM bookings WHERE train_id = $1 AND seat_no = $2 AND status = 'CONFIRMED'",
+      [trainId, seatNo]
+    );
+    return rows.length > 0;
+  }
+
   async function holdSeat({ trainId, seatNo, userId }) {
     return transaction(async client => {
       // A train row lock serializes Phase 1 writes in real PostgreSQL.
       // The in-memory emulator does not model PostgreSQL locking.
       const train = await getTrain(client, trainId, true);
       checkSeat(train, seatNo);
-      const { rows: sold } = await client.query(
-        'SELECT id FROM bookings WHERE train_id = $1 AND seat_no = $2', [trainId, seatNo]
-      );
-      if (sold.length) throw new BookingError(409, 'This seat is already sold.');
+      if (await isSold(client, trainId, seatNo)) throw new BookingError(409, 'This seat is already sold.');
       const { rows: holds } = await client.query(
         'SELECT * FROM seat_holds WHERE train_id = $1 AND seat_no = $2', [trainId, seatNo]
       );
@@ -112,17 +117,12 @@ export function createBookingService(pool, { holdSeconds = 300, now = () => Date
       const train = await getTrain(client, trainId, true);
       checkSeat(train, seatNo);
       const confirmationKey = createHash('sha256').update(holdToken).digest('hex');
-      const { rows: bookings } = await client.query(
-        'SELECT id, pnr, seat_no, status, user_id, train_id, created_at, confirmation_key FROM bookings WHERE train_id = $1 AND seat_no = $2', [trainId, seatNo]
+      const { rows: [previous] } = await client.query(
+        'SELECT id, pnr, seat_no, status, user_id, train_id, created_at FROM bookings WHERE train_id = $1 AND user_id = $2 AND confirmation_key = $3',
+        [trainId, userId, confirmationKey]
       );
-      if (bookings.length) {
-        const previous = bookings[0];
-        if (previous.user_id === userId && previous.confirmation_key === confirmationKey) {
-          const { confirmation_key, ...booking } = previous;
-          return { booking, train, recovered: true };
-        }
-        throw new BookingError(409, 'This seat is already sold.');
-      }
+      if (previous) return { booking: previous, train, recovered: true };
+      if (await isSold(client, trainId, seatNo)) throw new BookingError(409, 'This seat is already sold.');
       const { rows: holds } = await client.query(
         'SELECT * FROM seat_holds WHERE train_id = $1 AND seat_no = $2', [trainId, seatNo]
       );
@@ -143,5 +143,35 @@ export function createBookingService(pool, { holdSeconds = 300, now = () => Date
     });
   }
 
-  return { listTrains, listSeats, holdSeat, confirmBooking };
+  async function manageTicket({ pnr, userId, seatNo, expectedSeat }) {
+    return transaction(async client => {
+      const lookup = 'SELECT pnr, train_id, seat_no, status FROM bookings WHERE pnr = $1 AND user_id = $2';
+      const { rows: [owned] } = await client.query(lookup, [pnr, userId]);
+      if (!owned) throw new BookingError(404, 'Ticket not found.');
+      const train = await getTrain(client, owned.train_id, true);
+      const { rows: [ticket] } = await client.query(lookup, [pnr, userId]);
+      if (seatNo === undefined) {
+        if (ticket.status === 'CONFIRMED') {
+          await client.query("UPDATE bookings SET status = 'CANCELLED' WHERE pnr = $1", [pnr]);
+        }
+        return { ...ticket, status: 'CANCELLED' };
+      }
+
+      if (ticket.status !== 'CONFIRMED') throw new BookingError(409, 'This ticket is cancelled.');
+      checkSeat(train, seatNo);
+      if (ticket.seat_no === seatNo) return ticket;
+      if (ticket.seat_no !== expectedSeat) throw new BookingError(409, 'The seat has changed. Reload your tickets and try again.');
+      if (await isSold(client, train.id, seatNo)) throw new BookingError(409, 'This seat is already sold.');
+      const { rows: [hold] } = await client.query(
+        'SELECT expires_at FROM seat_holds WHERE train_id = $1 AND seat_no = $2', [train.id, seatNo]
+      );
+      if (hold && new Date(hold.expires_at).getTime() > now()) {
+        throw new BookingError(409, 'This seat is currently held. Choose another.');
+      }
+      await client.query('UPDATE bookings SET seat_no = $1 WHERE pnr = $2', [seatNo, pnr]);
+      return { ...ticket, seat_no: seatNo };
+    });
+  }
+
+  return { listTrains, listSeats, holdSeat, confirmBooking, manageTicket };
 }

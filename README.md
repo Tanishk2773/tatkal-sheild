@@ -52,7 +52,7 @@ Press **Ctrl+C** in the terminal to stop the server. Run `npm start` from the sa
 | Area | What you can do |
 | --- | --- |
 | Journey planner | Search 49 selected Indian railway stations by name, code or a supported alias. Three mock services supply the bookable inventory. |
-| Passenger accounts | Register, sign in, sign out and view your own ticket history. Passwords are salted and hashed with scrypt. The server validates the session cookie for booking requests. |
+| Passenger accounts | Sign in to view your own ticket history, move a booking to a free seat on the same demo train, or cancel it and release the seat. Passwords are salted and hashed with scrypt. The server validates the session cookie for booking requests. |
 | Coach and booking service | Inspect free, held and sold seats. Holds expire after five minutes. Transactions, ownership checks and a unique seat constraint protect confirmations. |
 | Recovery drill | Drop a successful response in the browser, reload and retry. A matching confirmation returns the existing PNR. |
 | Operations Lab | Inspect the health-probe response time, free seats and active holds. Follow an interactive explanation of the failure. |

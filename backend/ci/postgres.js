@@ -1,4 +1,4 @@
-﻿import assert from 'node:assert/strict';
+import assert from 'node:assert/strict';
 import { createDatabase } from '../src/db.js';
 import { createBookingService } from '../src/services/booking.js';
 
@@ -19,7 +19,14 @@ try {
   const retry = await service.confirmBooking(confirmation);
   assert.equal(retry.booking.pnr, original.booking.pnr);
   assert.equal(retry.recovered, true);
-  console.log('PostgreSQL verified one successful hold, one conflict, and the same PNR after retry.');
+  const { pnr } = original.booking;
+  const changed = await service.manageTicket({ pnr, userId, seatNo: 2, expectedSeat: 1 });
+  assert.equal(changed.seat_no, 2);
+  assert.equal((await service.manageTicket({ pnr, userId })).status, 'CANCELLED');
+  const replacement = await service.holdSeat({ trainId: 1, seatNo: 2, userId });
+  const rebooked = await service.confirmBooking({ ...replacement, userId });
+  assert.notEqual(rebooked.booking.pnr, pnr);
+  console.log('PostgreSQL verified seat contention, PNR recovery, seat changes and rebooking after cancellation.');
 } finally {
   await db.pool.end();
 }
