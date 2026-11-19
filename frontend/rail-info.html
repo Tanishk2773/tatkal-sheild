@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Rail information · Tatkal Shield</title>
+  <link rel="stylesheet" href="/css/styles.css?v=10">
+  <link rel="stylesheet" href="/css/checkout.css">
+  <link rel="stylesheet" href="/css/passenger.css">
+  <script type="module" src="/js/rail-info.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/"><span class="brand-mark" aria-hidden="true">TS</span>Tatkal Shield</a>
+    <nav><a href="/#journey">Book a train</a><a href="/rail-info.html" aria-current="page">Rail information</a></nav>
+  </header>
+  <main>
+    <section class="panel flow-page">
+      <h1 class="rail-title">Rail information</h1>
+      <p class="subtle">Check train status, fares, station facilities and other information from RailKit.</p>
+      <form class="checkout-form" id="lookup">
+        <label>Choose a lookup<select id="lookup-method"></select></label>
+        <div id="lookup-fields"></div>
+        <button type="submit" class="primary-button" disabled>Search RailKit</button>
+      </form>
+      <p id="lookup-status" role="status"></p>
+      <div id="lookup-results" class="rail-results"></div>
+    </section>
+  </main>
+</body>
+</html>

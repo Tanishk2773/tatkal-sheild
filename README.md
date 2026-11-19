@@ -108,3 +108,10 @@ npm test
 | [backend/sql](backend/sql/) | Database schema |
 | [backend/tests](backend/tests/) | HTTP acceptance, authorization and retry tests |
 | [.github/workflows](.github/workflows/) | CI, temporary staging and image delivery |
+
+## Upstream projects
+
+The original RailKit and YouPI ZIPs are preserved locally in `integrations/upstream/`. Keep them outside the web root and open them separately to work with their original package layouts. The archives include their own infrastructure, test tooling and mobile code. Tatkal Shield uses the RailKit npm package and the YouPI merchant session API.
+
+- **Rail information** exposes the RailKit lookups for trains, stations, fares, availability, PNR, running status and other timetable data. Set `RAILKIT_API_KEY` on the server to connect the feed.
+- **YouPI sandbox** opens a merchant checkout from the payment screen when all four `YOUPI_SANDBOX_*` variables in [.env.example](.env.example) are set. Configure a YouPI test deployment and use test credentials. The server uses the order’s fare and an idempotency key. Tatkal Shield tickets are issued by the local demo wallet.

@@ -102,6 +102,14 @@ for (const id of ['origin', 'destination']) {
   });
 }
 
+$('swap-stations').addEventListener('click', () => {
+  const origin = $('origin');
+  const destination = $('destination');
+  const previousOrigin = origin.value;
+  fillStation(origin, destination.value);
+  fillStation(destination, previousOrigin);
+});
+
 function renderDemoRoutes() {
   const routes = new Map();
   for (const train of state.trains) {
@@ -459,7 +467,7 @@ $('journey-form').addEventListener('submit', async event => {
 $('retry-timetable').addEventListener('click', () => boot().catch(error => message(error.message)));
 
 function renderPassenger() {
-  $('passenger-open').textContent = passenger ? 'My account' : 'Passenger sign in';
+  $('passenger-open').textContent = passenger ? 'My tickets' : 'Sign in';
   $('passenger-form').hidden = Boolean(passenger);
   $('passenger-profile').hidden = !passenger;
   $('account-title').textContent = passenger ? passenger.name : registerMode ? 'Create passenger account' : 'Passenger sign in';
@@ -736,6 +744,24 @@ async function pay() {
   } finally { $('pay-now').disabled = false; }
 }
 $('pay-now').onclick = pay;
+api('/youpi/status').then(({ enabled }) => {
+  $('youpi-option').hidden = !enabled;
+}).catch(() => { /* The local demo wallet remains available. */ });
+
+$('open-youpi').onclick = async event => {
+  if (!state.hold?.checkoutId) return;
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    const { checkoutUrl } = await api('/checkout/' + state.hold.checkoutId + '/youpi', {});
+    window.location.assign(checkoutUrl);
+  } catch (error) {
+    message(error.message);
+  } finally {
+    button.disabled = false;
+  }
+};
+
 $('check-paid').onclick = () => $('confirm').click();
 let referenceRequest = 0;
 async function loadReference(from,to) {

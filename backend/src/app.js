@@ -1,3 +1,5 @@
+import { mountYoupi } from './youpi.js';
+import { mountRailInfo } from './rail-info.js';
 // Express serves the API and the buildless frontend from one local origin.
 import { mountCheckout } from './checkout.js';
 import express from 'express';
@@ -41,16 +43,9 @@ export function createApp(database, options = {}) {
   });
   const requirePassenger = mountPassengers(app, database.pool, options);
 
+  mountRailInfo(app);
+  mountYoupi(app, database.pool, requirePassenger);
   mountCheckout(app, database.pool, requirePassenger, service);
-  app.get('/api/railkit/search', async (req, res) => {
-    if (!process.env.RAILKIT_API_KEY) return res.json({ enabled: false });
-    const { from, to } = req.query;
-    if (![from,to].every(code => typeof code === 'string' && /^[A-Z0-9]{1,6}$/.test(code))) throw new BookingError(400,'Choose valid station codes.');
-    const sdk = await import('railkit');
-    sdk.configure(process.env.RAILKIT_API_KEY);
-    const result = await sdk.searchTrainBetweenStations(from,to);
-    res.json({enabled:true, result});
-  });
   app.get('/api/health', async (_req, res) => {
     await database.pool.query('SELECT 1');
     res.json({ status: 'ok', phase: 1, storage: database.mode });
