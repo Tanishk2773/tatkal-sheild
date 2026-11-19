@@ -3,10 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#101624">
+  <meta name="theme-color" content="#090d12">
   <title>Tatkal Shield · DevOps showcase</title>
-  <link rel="stylesheet" href="brief.css?v=2">
-  <script type="module" src="brief.js?v=2"></script>
+  <link rel="stylesheet" href="brief.css?v=3">
+  <link rel="stylesheet" href="showcase.css?v=1">
+  <script type="module" src="brief.js?v=3"></script>
 </head>
 <body>
   <header class="site-header">
@@ -15,47 +16,105 @@
   </header>
   <main id="top">
     <section class="opening">
-      <div>
-        <p class="eyebrow">College DevOps project</p>
-        <h1>What happens when the booking reply disappears?</h1>
-        <p>Walk the jury through a family reservation under contention, a dropped confirmation, and the pipeline that tests both.</p>
-        <a class="action" href="#backend">Start the walkthrough →</a>
+      <div class="opening-copy">
+        <p class="eyebrow"><span class="live-pip"></span>RESERVATION SYSTEM / ENGINEERING BRIEF</p>
+        <h1>ONE RUSH.<br><span>EVERY SEAT</span><br>ACCOUNTED FOR.</h1>
+        <p class="opening-deck">A working reliability demo for a familiar failure. Several passengers go for the same seats. A booking succeeds. The confirmation vanishes.</p>
+        <a class="action" href="#backend">EXPLORE THE SYSTEM <span>↘</span></a>
       </div>
-      <aside class="hero-machine" aria-label="Booking events">
-        <span>BOOKING TRACE</span>
-        <ol><li>Seats held</li><li>Payment committed</li><li class="lost">Reply lost</li><li>Original tickets recovered</li></ol>
-      </aside>
+      <div class="signal-board" aria-label="Animated booking workflow visualization">
+        <div class="board-top"><span>BOOKING EVENT TRACE</span><span id="board-clock">00:00:00</span></div>
+        <div class="board-route"><span>MUMBAI CSMT</span><i></i><span>PUNE JN</span></div>
+        <div class="board-train"><div class="train-glow"></div><span>TS</span><strong>DECCAN DAWN</strong><small>TRAIN 01 · MOCK INVENTORY</small></div>
+        <div class="board-log"><p><b>01</b><span>Seat lock acquired</span><i>COMMITTED</i></p><p><b>02</b><span>Payment confirmed</span><i>COMMITTED</i></p><p class="log-drop"><b>03</b><span>Client acknowledgement</span><i>LOST</i></p><p class="log-retry"><b>04</b><span>Original PNR returned</span><i>RECOVERED</i></p></div>
+        <div class="board-foot"><span>POSTGRESQL · TRANSACTIONAL BOOKING</span><span>DEMO MODE</span></div>
+      </div>
+      <a class="scroll-cue" href="#problem">SCROLL TO TRACE <span>↓</span></a>
     </section>
+
+    <section class="ticker" aria-label="Project technologies"><div>EXPRESS API <b>✳</b> POSTGRESQL <b>✳</b> IDEMPOTENT RETRY <b>✳</b> GITHUB ACTIONS <b>✳</b> DOCKER <b>✳</b> </div></section>
+
     <section class="chapter reveal" id="problem">
-      <p class="eyebrow">Problem statement</p><h2>A family needs several seats during a rush</h2>
-      <p>Multiple passengers may choose overlapping seats. A partial reservation can split a group, and a lost payment acknowledgement leaves the passenger unsure whether to try again.</p>
-      <div class="cards">
-        <article><h3>Competing requests</h3><p>Lock booking writes for that train. Reserve the entire group or leave the seats untouched.</p></article>
-        <article><h3>Abandoned checkout</h3><p>Give families five minutes to add details and pay. Expired holds return to availability.</p></article>
-        <article><h3>Missing reply</h3><p>Retry with the same hold token and return the original PNRs for every traveller.</p></article>
+      <div class="chapter-index"><span>01</span><span>THE FAILURE MODE</span></div>
+      <div class="chapter-content"><p class="eyebrow">PROBLEM STATEMENT</p><h2>A fast booking window makes two problems collide.</h2>
+        <p class="chapter-lede">A high demand booking window rewards fast, repeated requests. Automated bots and real passengers can compete at the same rate. A blunt limit by IP address can block a whole campus or mobile carrier while distributed bots keep moving.</p>
+        <div class="cards">
+          <article><span class="card-index">A / CONTENTION</span><h3>Two groups. One seat.</h3><p>Parallel requests must not produce duplicate tickets or leave half a family reservation behind.</p></article>
+          <article><span class="card-index">B / FAIR ACCESS</span><h3>Shared networks look like one user.</h3><p>IP-only throttling can penalize passengers behind campus Wi-Fi, carrier NAT or public networks.</p></article>
+          <article><span class="card-index">C / UNCERTAIN REPLIES</span><h3>Committed, but not confirmed.</h3><p>A dropped network response leaves the passenger unsure whether retrying will create another ticket.</p></article>
+        </div>
       </div>
     </section>
+
     <section class="chapter reveal" id="backend">
-      <p class="eyebrow">Backend walkthrough</p><h2>Follow a family booking</h2>
-      <p>Choose a scenario to see the requests, the database changes, and the result the passenger sees.</p>
-      <div class="scenario-controls"><button id="contention" aria-pressed="true">Seat contention</button><button id="recovery" aria-pressed="false">Lost reply</button></div>
-      <div class="interactive" id="booking-trace"></div>
-      <a class="secondary" href="/#drill">Open the failure drill in the booking app ↗</a>
+      <div class="chapter-index"><span>02</span><span>RUN THE SIMULATION</span></div>
+      <div class="chapter-content"><p class="eyebrow">INTERACTIVE MODEL</p><h2>Watch requests compete for a family’s seats.</h2>
+        <p class="chapter-lede">Adjust the burst, remaining seats, bot share and passengers sharing one public IP. The comparison is illustrative: the IP row estimates which requests pass a five-request address cap and race for seats. The fair-queue row assumes verified passengers can be distinguished and admitted before automated traffic.</p>
+        <div class="simulator">
+          <div class="sim-controls">
+            <label>Incoming requests <output id="request-count-label">60</output><input id="request-count" type="range" min="10" max="200" step="10" value="60"></label>
+            <label>Seats available <output id="seat-count-label">12</output><input id="seat-count" type="range" min="1" max="60" step="1" value="12"></label>
+            <label>Automated requests <output id="bot-count-label">40%</output><input id="bot-count" type="range" min="0" max="90" step="5" value="40"></label>
+            <label>Passengers sharing a public IP <output id="shared-count-label">8</output><input id="shared-count" type="range" min="1" max="20" value="8"></label>
+            <button id="run-simulation" class="action" type="button">RUN REQUEST BURST ↗</button>
+          </div>
+          <div class="sim-results" aria-live="polite">
+            <div class="sim-toolbar"><span id="simulation-state">READY / NO REQUESTS SENT</span><span>MODEL ONLY · NO LIVE NETWORK TRAFFIC</span></div>
+            <div class="metric-grid">
+              <article><span>IP-ONLY LIMIT</span><strong id="ip-human">—</strong><small id="ip-caption">Human requests admitted / tickets</small></article>
+              <article><span>FAIR-ADMISSION MODEL</span><strong id="fair-human">—</strong><small id="fair-caption">Verified humans queued / tickets</small></article>
+              <article><span>SEATS AWARDED TO HUMANS</span><strong id="seat-outcome">—</strong><small>IP-only estimate / fair queue</small></article>
+            </div>
+            <div class="request-stream" id="request-stream" aria-label="Simulated request outcomes"></div>
+            <div class="sim-explain" id="sim-explanation">Illustrative model only. It assumes five requests per public IP, bots rotating across addresses, and a fair queue with reliable passenger verification. It does not connect to a railway service or prove that identity checks can detect every bot.</div>
+          </div>
+        </div>
+      </div>
     </section>
+
+    <section class="chapter reveal" id="defense">
+      <div class="chapter-index"><span>03</span><span>THE PROPOSED DEFENSE</span></div>
+      <div class="chapter-content"><p class="eyebrow">WHAT FAIR ADMISSION NEEDS</p><h2>Layer signals. Protect the seat at the write.</h2>
+        <div class="defense-flow">
+          <article><span>01</span><h3>Verify before the rush</h3><p>Passkeys or device-bound attestation can raise confidence in a session without putting an SMS round trip in the booking path.</p></article>
+          <article><span>02</span><h3>Queue by journey</h3><p>A per-train, date and class waiting room can cap the write-path load and give excess requests a predictable place to wait.</p></article>
+          <article><span>03</span><h3>Admit without IP bias</h3><p>Combine account, device, request-rate and abuse signals. An IP address is one signal, since many passengers can share one.</p></article>
+          <article><span>04</span><h3>Allocate atomically</h3><p>An atomic inventory operation reserves all requested seats or none. Idempotency keys and fencing versions make retries safe.</p></article>
+        </div>
+        <p class="proposal-note"><b>ARCHITECTURE PROPOSAL · FROM THE ATTACHED BLUEPRINT</b> Virtual waiting rooms, passkeys, device attestation, Redis or actor-based inventory, payment sagas and async legacy sync are scale-up design ideas. The current college demo implements PostgreSQL seat locking, timed holds, group validation, mock payment and PNR recovery. It does not implement those production services.</p>
+      </div>
+    </section>
+
+    <section class="chapter reveal" id="trace">
+      <div class="chapter-index"><span>04</span><span>THE LIVE BOOKING FLOW</span></div>
+      <div class="chapter-content"><p class="eyebrow">TATKAL SHIELD / WHAT RUNS TODAY</p><h2>One group hold. One payment. Separate PNRs.</h2>
+        <div class="scenario-controls" role="group" aria-label="Backend walkthrough scenarios"><button id="contention" type="button" aria-pressed="true">Seat contention</button><button id="recovery" type="button" aria-pressed="false">Lost reply recovery</button></div>
+        <div class="interactive" id="booking-trace"></div>
+        <a class="secondary" href="/#drill">OPEN THE BOOKING APP AND RUN THE LOST-REPLY DRILL ↗</a>
+      </div>
+    </section>
+
     <section class="chapter reveal" id="delivery">
-      <p class="eyebrow">Continuous integration and delivery</p><h2>From GitHub commit to tested Docker image</h2>
-      <div class="interactive" id="delivery-trace"></div>
-      <a class="secondary" href="https://github.com/Tanishk2773/tatkal-sheild/actions/workflows/booking.yml">Open GitHub Actions ↗</a>
+      <div class="chapter-index"><span>05</span><span>DEVOPS DELIVERY</span></div>
+      <div class="chapter-content"><p class="eyebrow">CONTINUOUS INTEGRATION / CONTINUOUS DELIVERY</p><h2>Every change has a path to a tested image.</h2>
+        <div class="delivery-strip"><span>GIT PUSH</span><b>→</b><span>CHECKS</span><b>→</b><span>POSTGRES RACE</span><b>→</b><span>DOCKER BUILD</span><b>→</b><span>STAGING BROWSER</span><b>→</b><span>IMAGE PUBLISH</span></div>
+        <div class="interactive" id="delivery-trace"></div>
+        <a class="secondary" href="https://github.com/Tanishk2773/tatkal-sheild/actions/workflows/booking.yml">OPEN GITHUB ACTIONS ↗</a>
+      </div>
     </section>
+
     <section class="chapter reveal" id="evidence">
-      <h2>What to show the jury</h2>
-      <div class="cards">
-        <article><h3>Run the booking drill</h3><p>Enable the dropped reply, choose two passengers on Mumbai CSMT → Pune Junction, and pay with the demo QR wallet. Refresh and retrieve both PNRs.</p><a href="/#drill">Open the drill ↗</a></article>
-        <article><h3>Check service readiness</h3><p id="service-status" role="status">Checking the booking API…</p><a href="/api/health">Open readiness response ↗</a></article>
-        <article><h3>Show the build evidence</h3><p>Open a successful run and show the PostgreSQL contention test, the staging browser test, and image publication.</p><a href="devops.mp4">Watch the DevOps film ↗</a></article>
+      <div class="chapter-index"><span>06</span><span>SHOW THE WORKING DEMO</span></div>
+      <div class="chapter-content"><p class="eyebrow">JURY WALKTHROUGH</p><h2>Reproduce the lost reply.</h2>
+        <div class="cards">
+          <article><span class="card-index">01 / BOOK</span><h3>Reserve for two</h3><p>Choose Mumbai CSMT → Pune Junction, select two seats in one class, add traveller details, and pay with the demo wallet.</p><a href="/#journey">START BOOKING ↗</a></article>
+          <article><span class="card-index">02 / INTERRUPT</span><h3>Drop the reply once</h3><p>Enable the Operations Lab fault before paying. The booking commits while the browser loses its confirmation response.</p><a href="/#drill">OPEN OPERATIONS LAB ↗</a></article>
+          <article><span class="card-index">03 / RECOVER</span><h3>Retrieve the same tickets</h3><p>Reload the page and retrieve the confirmation. The original PNR for each passenger should return.</p><a href="https://github.com/Tanishk2773/tatkal-sheild/actions/runs/44584614252">VIEW VERIFIED CI RUN ↗</a></article>
+        </div>
+        <p id="service-status" class="service-status" role="status">CHECKING BOOKING API…</p>
       </div>
     </section>
   </main>
-  <footer><a href="/">Tatkal Shield booking app ↗</a><a href="#top">Back to top ↑</a></footer>
+  <footer><span>TATKAL SHIELD · SYSTEMS WALKTHROUGH</span><a href="/">BOOKING APP ↗</a><a href="#top">BACK TO TOP ↑</a></footer>
 </body>
 </html>

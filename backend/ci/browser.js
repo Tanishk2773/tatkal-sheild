@@ -152,14 +152,18 @@ try {
       .filter({ hasText: 'Cancelled' })
       .waitFor();
     await page.goto(origin + '/jury/');
-    await page.getByRole('heading', { name: 'What happens when the booking reply disappears?' }).waitFor();
+    await page.getByRole('heading', { name: /ONE RUSH/ }).waitFor();
+    await page.locator('#run-simulation').click();
+    assert.equal(await page.locator('#ip-human').innerText(), '25 / 6');
+    assert.equal(await page.locator('#fair-human').innerText(), '36 / 12');
+    assert.equal(await page.locator('#seat-outcome').innerText(), '12 / 18');
     await page.locator('#recovery').click();
     const backendTrace = page.locator('#booking-trace');
     await backendTrace.getByRole('button', { name: 'Recover' }).click();
-    await backendTrace.getByRole('heading', { name: 'Refresh and retrieve the same PNRs' }).waitFor();
-    await page.locator('#delivery-trace').getByRole('button', { name: 'Staging' }).click();
-    await page.getByRole('heading', { name: 'Repeat checkout against the container' }).waitFor();
-    await page.getByText('Ready ·', { exact: false }).waitFor();
+    await backendTrace.getByRole('heading', { name: 'Retry with the same hold token' }).waitFor();
+    await page.locator('#delivery-trace').getByRole('button', { name: 'Browser' }).click();
+    await page.getByRole('heading', { name: 'Exercise the staging booking app' }).waitFor();
+    await page.getByText('API READY', { exact: false }).waitFor();
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'jury overflow ' + width);
     assert.deepEqual(errors, []);
     console.log(
