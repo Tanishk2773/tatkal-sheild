@@ -17,7 +17,11 @@ try {
     channel: process.env.BROWSER_CHANNEL || undefined,
     headless: true,
   });
-  for (const width of [1280, 390]) {
+  for (const { width, count, drill } of [
+    { width: 1280, count: 1, drill: false },
+    { width: 390, count: 2, drill: true },
+    { width: 360, count: 6, drill: false },
+  ]) {
     const ctx = await browser.newContext({baseURL: origin,
       viewport: { width, height: 850 },
       reducedMotion: 'reduce',
@@ -28,22 +32,38 @@ try {
     const step = (s) =>
       page.waitForSelector('body[data-page="' + s + '"]', { timeout: 7000 });
     await page.goto(origin);
-    if (width === 390) {
+    if (drill) {
       await page.locator('footer a[href="#operations"]').click();
       await page.locator('#drill summary').click();
       await page.locator('#drop-response').check();
     }
-    if (width === 390) await page.getByRole('link', { name: 'Book a train' }).click();
+    if (drill) await page.getByRole('link', { name: 'Book a train' }).click();
     else await page.locator('#book-ticket').click();
-    await page.locator('#passenger-count').selectOption('2');
+    await page.locator('#passenger-count').selectOption(String(count));
     await page.locator('#demo-routes button').first().click();
     await step('results');
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'results overflow ' + width);
+    assert.equal(await page.locator('#flow-progress [aria-current=step]').innerText(), 'Train');
+    await page.locator('#train-sort').selectOption('availability');
+    const availability = (await page.locator('.availability-count').allTextContents()).map(text => Number.parseInt(text, 10));
+    assert.ok(availability.length > 1);
+    assert.deepEqual(availability, [...availability].sort((a, b) => b - a));
+    await page.locator('#train-sort').selectOption('departure');
+    assert.match(await page.locator('.train-card').first().innerText(), /Deccan Dawn Express/);
     await page.locator('.train-card').first().click();
     await step('coach');
     await page.locator('.class-choice').nth(1).click();
-    await page.locator('.seat.free').first().click();
-    await page.locator('.seat.free:not(.selected)').first().click();
-    assert.match(await page.locator('#selection-summary').innerText(), /2 of 2 selected/);
+    const reserve = page.locator('#reserve-seats');
+    for (let i = 0; i < count; i++) {
+      assert.equal(await reserve.isEnabled(), false);
+      const freeSeat = page.locator('.seat.free:not(.selected)').first();
+      if (i === 0) {
+        await freeSeat.focus();
+        await page.keyboard.press('Space');
+        assert.ok(await page.locator('.seat.selected').first().evaluate(seat => seat === document.activeElement));
+      } else await freeSeat.click();
+    }
+    assert.match(await page.locator('#selection-summary').innerText(), new RegExp(count + ' of ' + count + ' selected'));
     await page.locator('#reserve-seats').click();
     await page.locator('#passenger-switch').click();
     await page.locator('#passenger-name').fill('Test Rider');
@@ -54,15 +74,18 @@ try {
     await page.locator('#passenger-submit').click();
     await step('traveller');
     const travellers = page.locator('.traveller-fields');
-    assert.equal(await travellers.count(), 2);
-    for (let i = 0; i < 2; i++) {
+    assert.equal(await travellers.count(), count);
+    for (let i = 0; i < count; i++) {
       const person = travellers.nth(i);
       await person.locator('[name=name]').fill('Sample Rider ' + (i + 1));
       await person.locator('[name=age]').fill('25');
       await person.locator('[name=gender]').selectOption('Other');
       await person.locator('[name=preference]').selectOption('Lower');
     }
-    await page.locator('#traveller-form button').click();
+    const displayTotal = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(840 * count);
+    assert.equal(await page.locator('#traveller [data-summary=total]').innerText(), displayTotal);
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'traveller overflow ' + width);
+    await page.locator('#continue-payment').click();
     await step('payment');
     await page.reload();
     await step('payment');
@@ -70,9 +93,9 @@ try {
       await page
         .locator('#pay-now')
         .innerText()
-        .then((x) => x.includes('1680')),
+        .then((x) => x.includes(String(840 * count))),
     );
-    if (width === 1280) {
+    if (!drill && width === 1280) {
       const response = await page.request.get(
         await page.locator('#pay-qr').getAttribute('src'),
       );
@@ -90,7 +113,7 @@ try {
       await wallet.getByText('Paid.', { exact: false }).waitFor();
       await wallet.close();
       await page.locator('#check-paid').click();
-    } else {
+    } else if (drill) {
       await page.locator('#pay-now').click();
       await page
         .getByText('Drill: the server committed', { exact: false })
@@ -98,11 +121,13 @@ try {
       await page.reload();
       await step('payment');
       await page.locator('#check-paid').click();
+    } else {
+      await page.locator('#pay-now').click();
     }
     await step('receipt');
     const pnrs = await page.locator('#group-tickets li').allTextContents();
-    assert.equal(pnrs.length, 2);
-    assert.notEqual(pnrs[0], pnrs[1]);
+    assert.equal(pnrs.length, count);
+    assert.equal(new Set(pnrs.map(text => text.match(/TS-[A-F0-9]+/)[0])).size, count);
     const pnr = await page.locator('#ticket-pnr').innerText();
     await page.reload();
     await step('receipt');
@@ -116,7 +141,7 @@ try {
     );
     await page.locator('#passenger-open').click();
     await page.locator('.saved-ticket summary').first().click();
-    await page.getByText('Sample Rider 2', { exact: false }).waitFor();
+    await page.getByText('Sample Rider ' + count, { exact: false }).waitFor();
     await page.getByRole('button', { name: 'Change seat' }).click();
     await page.getByRole('button', { name: 'Save seat change' }).click();
     await page.getByText('Seat changed. Your PNR is the same.').waitFor();
@@ -138,7 +163,7 @@ try {
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'jury overflow ' + width);
     assert.deepEqual(errors, []);
     console.log(
-      width + 'px checkout, reload, ticket changes, cancellation and jury walkthrough passed',
+      width + 'px, ' + count + ' passenger(s): checkout, reload, ticket changes, cancellation and jury walkthrough passed',
     );
     await ctx.close();
   }
@@ -147,4 +172,3 @@ try {
   if (server) await new Promise((resolve) => server.close(resolve));
   await database?.pool.end();
 }
-

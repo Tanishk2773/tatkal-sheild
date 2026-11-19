@@ -6,6 +6,8 @@ A college DevOps showcase about one passenger question: **Did my booking go thro
 
 [Watch the DevOps film](frontend/jury/devops.mp4) · [Watch the passenger story](frontend/jury/tatkal-shield.mp4) · [View CI runs](https://github.com/Tanishk2773/tatkal-sheild/actions/workflows/booking.yml)
 
+The passenger booking interface adapts the [Flight Ticket Booking Web Figma Community template](https://www.figma.com/community/file/1592189951122278094/flight-ticket-booking-web) for train journeys.
+
 ## Run on your computer
 
 Install Git and Node.js 22.16 or newer (npm comes with Node.js). Use a GitHub account with access to this private repository. [Download Git](https://git-scm.com/downloads) · [Download Node.js](https://nodejs.org/en/download)

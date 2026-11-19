@@ -134,6 +134,8 @@ function renderDemoRoutes() {
   $('demo-routes').replaceChildren(element('span', '', 'Try a demo route'), ...buttons);
 }
 
+$('train-sort').addEventListener('change', renderTrains);
+
 function renderTrains() {
   const locked = Boolean(state.hold) || state.busy;
   $('find-trains').disabled = locked || !state.trains.length;
@@ -141,42 +143,51 @@ function renderTrains() {
   for (const button of $('demo-routes').querySelectorAll('button')) button.disabled = locked;
   $('booking').hidden = !query;
   document.querySelector('.seats-panel').hidden = !state.trainId;
-  $('booking').classList.toggle('results-only', !state.trainId);
   $('free-total').textContent = state.trains.reduce((sum, train) => sum + train.available, 0);
   $('held-total').textContent = state.trains.reduce((sum, train) => sum + train.held, 0);
   const matches = query ? state.trains.filter(train => train.source === query.source &&
     train.destination === query.destination && localDay.format(new Date(train.departure)) === query.day) : [];
+  const byDeparture = (a, b) => Date.parse(a.departure) - Date.parse(b.departure) || a.id - b.id;
+  matches.sort($('train-sort').value === 'availability'
+    ? (a, b) => b.available - a.available || byDeparture(a, b)
+    : byDeparture);
+  if (query) {
+    $('results-route').textContent = query.source + ' → ' + query.destination;
+    $('results-date').textContent = new Intl.DateTimeFormat('en-IN', {
+      dateStyle: 'full', timeZone: 'Asia/Kolkata'
+    }).format(new Date(query.day + 'T12:00:00+05:30'));
+  }
   $('train-count').textContent = matches.length + (matches.length === 1 ? ' service' : ' services') + ' · ' + passengerCount() + (passengerCount() === 1 ? ' passenger' : ' passengers');
+  const focusedTrain = document.activeElement?.dataset.trainId;
   $('train-list').replaceChildren();
   if (query && !matches.length) {
-    $('train-list').append(element('p', 'empty-result', 'No demo trains match this journey and date. Try a demo route above.'));
+    $('train-list').append(element('p', 'empty-result', 'No demo trains match this journey and date. Edit your journey to try another route or date.'));
   }
   for (const train of matches) {
     const button = element('button', 'train-card');
     button.type = 'button';
     button.setAttribute('aria-pressed', String(state.trainId === train.id));
     button.disabled = state.busy;
-    button.append(
-      element('span', 'train-name', train.name),
-      element('span', 'train-route', train.source + ' → ' + train.destination),
-      element('span', 'train-departure', departure(train.departure))
-    );
+    button.dataset.trainId = String(train.id);
+    const service = element('span', 'train-service');
+    service.append(element('span', 'train-name', train.name), element('span', 'train-departure', departure(train.departure)));
+    const route = element('span', 'train-route');
+    route.append(element('span', '', train.source), element('span', 'route-connection', ' → '), element('span', '', train.destination));
     const availability = element('span', 'train-availability');
-    availability.append(element('span', '', train.available + ' seats available'), element('span', 'subtle', train.total_seats + ' total'));
-    const track = element('span', 'availability-track');
-    const fill = element('span');
-    fill.style.width = (train.available / train.total_seats * 100) + '%';
-    track.append(fill);
-    button.append(availability, track, element('span', 'seat-link', 'Choose seats →'));
+    availability.append(element('span', 'availability-count', train.available + ' seats available'), element('span', 'seat-link', 'Choose seats →'));
+    button.append(service, route, availability);
     button.addEventListener('click', async () => {
       await selectTrain(train.id);
       if (state.trainId === train.id) go(state.hold ? activeHoldPage() : 'coach');
     });
     $('train-list').append(button);
+    if (button.dataset.trainId === focusedTrain && !button.disabled) button.focus({ preventScroll: true });
   }
 }
 
 function renderSeats() {
+  const focusedSeat = document.activeElement?.dataset.seatNo;
+  const focusedClass = document.activeElement?.dataset.classCode;
   $('seat-grid').replaceChildren();
   const active = classes.find(c => c.code === selectedClass) || classes[0];
   document.querySelector('.coach-badge').textContent = active.name + ' · ' + active.coach;
@@ -185,9 +196,16 @@ function renderSeats() {
     const button = element('button','class-choice', c.name + ' · ₹' + c.fare + ' · ' + seats.filter(s => s.status === 'free').length + ' free');
     button.setAttribute('aria-pressed', String(active === c));
     button.disabled = !seats.length || Boolean(state.hold);
-    button.onclick = () => { if (selectedClass !== c.code) selectedSeats.clear(); selectedClass = c.code; remember(); renderSeats(); };
+    button.dataset.classCode = c.code;
+    button.onclick = () => {
+      if (selectedClass !== c.code) selectedSeats.clear();
+      selectedClass = c.code;
+      remember();
+      renderSeats();
+    };
     return button;
   }));
+  if (focusedClass) $('classes').querySelector('[data-class-code="' + focusedClass + '"]')?.focus({ preventScroll: true });
   for (const seat of state.seats) {
     if (seat.status !== 'free' && !state.busy) selectedSeats.delete(seat.seatNo);
   }
@@ -202,6 +220,7 @@ function renderSeats() {
     const selected = selectedSeats.has(seat.seatNo);
     const button = element('button', 'seat ' + seat.status + (mine ? ' mine' : '') + (selected ? ' selected' : ''), String(seat.seatNo).padStart(2, '0'));
     button.type = 'button';
+    button.dataset.seatNo = String(seat.seatNo);
     button.disabled = seat.status !== 'free' || state.busy || Boolean(state.hold);
     button.setAttribute('aria-label', 'Seat ' + seat.seatNo + ', ' + (mine ? 'held by you' : seat.status));
     button.title = mine ? 'Your seat hold' : seat.status === 'free' ? 'Hold seat ' + seat.seatNo : seat.status;
@@ -213,9 +232,9 @@ function renderSeats() {
         return;
       } else selectedSeats.add(seat.seatNo);
       renderSeats();
-      $('seat-grid').querySelector('[aria-label="' + button.getAttribute('aria-label') + '"]')?.focus();
     };
     $('seat-grid').append(button);
+    if (button.dataset.seatNo === focusedSeat && !button.disabled) button.focus({ preventScroll: true });
   }
   document.querySelector('.seats-panel').setAttribute('aria-busy', String(state.busy));
   renderHold();
@@ -704,7 +723,9 @@ $('passenger-logout').addEventListener('click', async event => {
 });
 
 const steps = ['results','coach','traveller','payment','receipt'];
-const titles = ['Select a train','Choose a class and seat','Passenger details','Payment','Ticket'];
+const summaryPanels = [...document.querySelectorAll('.trip-summary')];
+for (const panel of summaryPanels) panel.append($('trip-summary-template').content.cloneNode(true));
+const rupees = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
 function remember() {
   history.replaceState({query,trainId:state.trainId,selectedClass}, '');
 }
@@ -726,14 +747,26 @@ function syncPage() {
   $('flow-nav').hidden = step < 0;
   $('flow-clock').hidden = !state.hold;
   $('release-hold').hidden = !state.hold || state.hold.pending;
-  $('flow-progress').textContent = 'Step ' + (step + 1) + ' of 5 · ' + titles[step];
+  [...$('flow-progress').children].forEach((item, index) => {
+    if (index === step) item.setAttribute('aria-current', 'step');
+    else item.removeAttribute('aria-current');
+  });
   for (const id of ['traveller','payment']) $(id).hidden = id !== page;
   if (state.hold) {
     const c = seatClass(state.hold.seatNo);
     const seats = seatsInHold(state.hold);
     const total = seats.length * c.fare;
     const train = state.trains.find(t => t.id === state.hold.trainId);
-    for (const el of document.querySelectorAll('.trip-summary')) el.textContent = [train?.name,c.name,'Seats '+formatSeats(seats),'₹'+total].filter(Boolean).join(' · ');
+    const summary = {
+      train: train?.name || 'Selected train',
+      route: train ? train.source + ' → ' + train.destination : '',
+      class: c.name,
+      seats: formatSeats(seats),
+      total: rupees.format(total),
+    };
+    for (const panel of summaryPanels) {
+      for (const field of panel.querySelectorAll('[data-summary]')) field.textContent = summary[field.dataset.summary];
+    }
     if (page === 'traveller' && !$('traveller-fields').children.length) {
       for (const seat of seats) {
         const fieldset = $('traveller-fields-template').content.cloneNode(true);
@@ -779,14 +812,14 @@ $('traveller-form').onsubmit = async e => {
     return { ...values, age: Number(values.age) };
   });
   state.busy = true;
-  form.querySelector('button').disabled = true;
+  $('continue-payment').disabled = true;
   try {
     const order = await api('/checkout',{travellers,holdToken:state.hold.holdToken});
     saveHold({...state.hold,checkoutId:order.id});
     form.reset();
     go('payment');
   } catch (error) { message(error.message); }
-  finally { state.busy = false; form.querySelector('button').disabled = false; }
+  finally { state.busy = false; $('continue-payment').disabled = false; }
 };
 async function pay() {
   if (!state.hold?.checkoutId || state.busy) return;

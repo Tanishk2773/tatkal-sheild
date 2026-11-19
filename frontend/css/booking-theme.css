@@ -1,0 +1,181 @@
+@font-face {
+  font-family: Ubuntu;
+  src: url('/assets/booking/ubuntu-400.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: Ubuntu;
+  src: url('/assets/booking/ubuntu-500.woff2') format('woff2');
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: Ubuntu;
+  src: url('/assets/booking/ubuntu-700.woff2') format('woff2');
+  font-weight: 700;
+  font-display: swap;
+}
+
+.booking-site {
+  --bg: #f7f8fa;
+  --text: #27263d;
+  --muted: #565d78;
+  --border: #c9d3e7;
+  --amber: #514bd9;
+  --accent: #514bd9;
+  --accent-hover: #403ab7;
+  --tint: #e0e6fa;
+  font-family: Ubuntu, system-ui, sans-serif;
+}
+.booking-site .topbar {
+  background: #fff;
+  color: var(--text);
+  border-top: 8px solid var(--tint);
+  border-bottom: 1px solid var(--border);
+}
+.booking-site .brand,
+.booking-site .brand-light,
+.booking-site .topbar nav a { color: var(--text); }
+.booking-site .brand-mark { background: var(--accent); color: #fff; border-color: var(--accent); }
+.booking-site .account-trigger,
+.booking-site .primary-button,
+.booking-site .search-action { background: var(--accent); border-color: var(--accent); color: #fff; }
+.booking-site :is(.account-trigger, .primary-button, .search-action):hover:not(:disabled) { background: var(--accent-hover); }
+.booking-site :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.booking-site a:not(.brand, .primary-button) { color: var(--accent); }
+.booking-site .topbar nav a { color: var(--text); }
+.booking-site .subtle { color: var(--muted); }
+.booking-site :is(h1,h2,h3) { letter-spacing: -.025em; }
+.booking-site .welcome-copy h1 { font-size: clamp(3.5rem, 7vw, 7.8rem); line-height: .94; }
+.booking-site .welcome-copy h1 span { display: block; color: var(--accent); font-style: normal; }
+.booking-site #welcome figcaption { background: #29254c; }
+.booking-site .fare-type,
+.booking-site .coach-badge { color: #3d388f; background: var(--tint); font-family: inherit; }
+.booking-site .field-label { display: inline-flex; gap: 7px; align-items: center; min-height: 18px; }
+.booking-site #journey-form { align-items: end; }
+.booking-site #journey-form :is(input, select),
+.booking-site :is(.checkout-form, .sort-control) :is(input, select) {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  background: #fff;
+}
+.booking-site #swap-stations { height: 48px; background: var(--tint); border-color: var(--border); color: var(--accent); }
+.booking-site #journey-form :is(input, select):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; box-shadow: none; }
+
+.booking-site .flow-nav { display: block; max-width: none; margin: 0 0 22px; }
+.booking-site .flow-nav[hidden] { display: none; }
+#flow-progress {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  padding: 3px;
+  margin: 0;
+  background: var(--tint);
+  border-radius: 8px;
+  list-style: none;
+  color: var(--muted);
+  text-align: center;
+}
+#flow-progress li { padding: .5rem .15rem; font-size: clamp(.68rem, 1.35vw, .94rem); }
+#flow-progress li[aria-current='step'] { color: #fff; background: var(--accent); border-radius: 6px; font-weight: 700; }
+.flow-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 12px; }
+.flow-actions #flow-clock { margin-inline-start: auto; color: var(--text); }
+.booking-site .booking-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr);
+  align-items: start;
+  gap: clamp(14px, 2vw, 24px);
+}
+.booking-site .trains-panel { grid-template-columns: minmax(220px, 1fr) minmax(0, 2fr); }
+.booking-site .booking-columns[hidden] { display: none; }
+.booking-site #booking { margin-top: 0; }
+.booking-site .flow-page { max-width: none; margin: 0; }
+.stage-content { min-width: 0; }
+.booking-site :is(.stage-heading, .journey-summary) p { margin: .65rem 0; }
+.booking-site .journey-summary h2 { font-size: 1.15rem; margin-bottom: 1rem; }
+.booking-site .journey-summary .primary-button { width: 100%; }
+.booking-site .seat-selection { display: block; margin: 0; }
+.booking-site .seat-selection p { margin: 0 0 14px; }
+.booking-site .sort-control { display: grid; gap: 5px; color: var(--muted); font-size: .82rem; }
+.booking-site .sort-control select { padding: .55rem; font: inherit; color: var(--text); }
+.booking-site .results-heading { margin-bottom: 16px; gap: 12px; }
+.booking-site .train-card {
+  display: grid;
+  grid-template-columns: minmax(124px, 1fr) minmax(0, 1.4fr) minmax(102px, auto);
+  align-items: center;
+  gap: 14px;
+  color: var(--text);
+  background: #fff;
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 3px #2626500d;
+}
+.booking-site .train-card[aria-pressed='true'] { border-color: var(--accent); background: #f5f4ff; }
+.booking-site .train-card:hover { box-shadow: 0 2px 5px #514bd92b; transform: none; }
+.booking-site .train-service,
+.booking-site .train-availability { display: grid; gap: 6px; margin: 0; }
+.booking-site .train-route { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; color: var(--muted); }
+.booking-site .train-departure { font: inherit; font-size: .78rem; color: var(--muted); }
+.booking-site .route-connection { color: var(--accent); font-weight: 700; }
+.booking-site .train-availability { border-inline-start: 1px dashed var(--border); padding-inline-start: 12px; }
+.booking-site .availability-count { color: #39347f; background: var(--tint); padding: .3rem .45rem; border-radius: 4px; }
+.booking-site .seat-link { margin: 0; color: var(--accent); font-family: inherit; }
+.booking-site .class-choice { background: #fff; color: var(--text); border-color: var(--border); }
+.booking-site .class-choice[aria-pressed=true] { background: var(--tint); color: #353082; border-color: var(--accent); }
+.booking-site .coach { background: #f7f8fd; border-color: var(--border); }
+.booking-site .seat.free { color: #39347f; border-color: #b5b9df; background: #e6e9fa; }
+.booking-site .seat.free:hover:not(:disabled) { background: #d8dcf5; }
+.booking-site .free-dot { background: #b5b9df; }
+.booking-site .seat.selected, .booking-site .seat.selected:hover:not(:disabled) { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+.booking-site #traveller-form { margin-top: 18px; }
+.booking-site .traveller-fields {
+  background: #fff;
+  border-color: var(--border);
+  padding: clamp(14px, 2vw, 24px);
+}
+.booking-site .traveller-fields .checkout-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.booking-site .trip-summary { font-weight: 400; }
+.booking-site .trip-summary dl { margin: 1rem 0; }
+.booking-site .trip-summary dl div { display: flex; justify-content: space-between; gap: 8px; border-top: 1px solid var(--border); padding: .65rem 0; }
+.booking-site .trip-summary dl div:last-child { font-weight: 700; font-size: 1.1rem; }
+.booking-site .trip-summary dd { margin: 0; text-align: end; }
+.booking-site #check-paid { display: block; margin: .65rem auto 0; }
+.booking-site .ticket-stub { background: var(--tint); }
+.booking-site #group-tickets { padding-left: 1.25rem; overflow-wrap: anywhere; }
+
+/* Keep the route sidebar before the cards and the checkout summary after the form on narrow screens. */
+@media (max-width: 900px) {
+  .booking-site :is(.booking-columns, .trains-panel) { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 530px) {
+  .booking-site .train-card { grid-template-columns: minmax(0, 1fr) auto; }
+  .booking-site .train-route { grid-row: 2; grid-column: 1 / -1; }
+  .booking-site .train-availability { grid-column: 2; grid-row: 1; }
+  .booking-site .traveller-fields .checkout-form { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .booking-site *, .booking-site *::before, .booking-site *::after { animation: none !important; transition: none !important; }
+}
+
+.booking-site .message.success { background: #edf6f0; border-color: #a7cdba; color: #225640; }
+.booking-site .search-hint, .booking-site #journey-form label { font-size: .85rem; }
+.booking-site .route-option { color: var(--text); }
+.booking-site .route-option:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.booking-site .journey-stops h3 { font-family: Ubuntu, system-ui, sans-serif; }
+.booking-site .journey-stops::before { background: var(--border); }
+@media (min-width: 1100px) {
+  .booking-site #journey { max-width: none; }
+  .booking-site #journey-form { grid-template-columns: minmax(0, 1fr) 40px minmax(0, 1fr) minmax(132px, .8fr) minmax(104px, .6fr) auto; }
+  .booking-site #journey-form .search-action { grid-column: auto; }
+}
+
+.booking-site .held-dot { background: #d59b48; }
+.booking-site .sold-dot { background: #ba7b82; }
+@media (max-width: 760px) {
+  .booking-site .topbar { flex-wrap: wrap; }
+  .booking-site .topbar nav { display: flex; width: 100%; order: 3; }
+}
