@@ -225,6 +225,10 @@ export function createBookingService(pool, { holdSeconds = 300, now = () => Date
           'INSERT INTO bookings (train_id, seat_no, user_id, pnr, status, confirmation_key, checkout_id, traveller, preference) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, pnr, seat_no, status, user_id, train_id, created_at',
           [trainId, hold.seat_no, userId, pnr, 'CONFIRMED', confirmationKey, checkoutId, traveller?.name ?? null, traveller?.preference ?? null]
         );
+        await client.query(
+          'INSERT INTO booking_outbox (event_id, event_type, payload) VALUES ($1,$2,$3)',
+          [pnr, 'booking.confirmed', JSON.stringify({ pnr, trainId, seatNo: hold.seat_no })]
+        );
         bookings.push(booking);
       }
       await client.query('DELETE FROM seat_holds WHERE train_id=$1 AND hold_token=$2', [trainId, holdToken]);

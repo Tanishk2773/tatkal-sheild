@@ -1,0 +1,55 @@
+name: tatkal-shield
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: tatkal
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tatkal_local}
+      POSTGRES_DB: booking
+    volumes:
+      - booking-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "tatkal", "-d", "booking"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+  app:
+    image: ${BOOKING_IMAGE:-tatkal-shield:local}
+    build: .
+    environment:
+      DATABASE_URL: postgres://tatkal:${POSTGRES_PASSWORD:-tatkal_local}@db:5432/booking
+    depends_on:
+      db:
+        condition: service_healthy
+    init: true
+    restart: unless-stopped
+  edge:
+    image: nginx:alpine
+    ports:
+      - "127.0.0.1:${BOOKING_PORT:-3011}:8080"
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/api/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+  outbox:
+    image: ${BOOKING_IMAGE:-tatkal-shield:local}
+    command: ["backend/src/outbox-worker.js"]
+    healthcheck:
+      disable: true
+    environment:
+      DATABASE_URL: postgres://tatkal:${POSTGRES_PASSWORD:-tatkal_local}@db:5432/booking
+    depends_on:
+      app:
+        condition: service_healthy
+    init: true
+    restart: unless-stopped
+volumes:
+  booking-data:

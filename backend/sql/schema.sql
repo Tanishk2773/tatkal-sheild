@@ -82,3 +82,14 @@ ALTER TABLE checkout_orders ADD COLUMN IF NOT EXISTS travellers JSONB;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS traveller TEXT;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS preference TEXT;
 CREATE INDEX IF NOT EXISTS bookings_by_confirmation ON bookings (train_id, user_id, confirmation_key);
+CREATE TABLE IF NOT EXISTS booking_outbox (
+  event_id TEXT PRIMARY KEY,
+  event_type TEXT NOT NULL,
+  payload JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS booking_event_projection (
+  event_id TEXT PRIMARY KEY REFERENCES booking_outbox(event_id),
+  payload JSONB NOT NULL,
+  projected_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

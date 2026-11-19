@@ -124,3 +124,27 @@ The original RailKit and YouPI ZIPs are preserved locally in `integrations/upstr
 
 - **Rail information** exposes the RailKit lookups for trains, stations, fares, availability, PNR, running status and other timetable data. Set `RAILKIT_API_KEY` on the server to connect the feed.
 - **YouPI sandbox** opens a merchant checkout from the payment screen when all four `YOUPI_SANDBOX_*` variables in [.env.example](.env.example) are set. Configure a YouPI test deployment and use test credentials. The server uses the order’s fare and an idempotency key. Tatkal Shield tickets are issued by the local demo wallet.
+## Run the primary website in Docker
+
+```sh
+docker compose up -d --build --wait
+docker compose ps
+```
+
+Open [the booking website](http://localhost:3011/) or [the jury showcase](http://localhost:3011/jury/). Only the Nginx gateway is published on the host. The app, PostgreSQL and the booking event worker communicate on the Compose network. `docker compose down` stops the stack and preserves the PostgreSQL volume.
+
+### How the two architecture PDFs map to the demo
+
+| Area | Implemented in Tatkal Shield | Further work from the PDFs |
+| --- | --- | --- |
+| Admission | Per-account and per-journey/class in-flight limits protect berth allocation. Excess requests receive a retry response without imposing a shared-IP quota at checkout. | Distributed waiting room, device attestation and passkeys |
+| Availability | Overlapping train list reads share one database operation. | SSE updates and threshold-based availability |
+| Inventory | PostgreSQL serializes allocation, matches berth preferences and holds the entire group together. The burst gate checks that 20 competing groups cannot overbook six berths. | Redis Lua segment masks, fencing versions and partitioned inventory |
+| Payment | Demo QR checkout uses an expiring hold and returns the existing PNRs when confirmation is retried. | Bank-backed UPI mandates and compensation workflows |
+| Booking events | Confirmation writes an outbox event in the booking transaction. A separate worker fills an idempotent local projection. | Kafka, Debezium, reconciliation and authorized CRIS integration |
+
+### CI and delivery
+
+GitHub Actions runs API and browser tests, checks allocation races on PostgreSQL, builds the commit SHA image with Buildx, scans it with Trivy, and runs checkout and outbox checks on disposable Compose staging. Successful pushes to `main` publish the exact tested image to GHCR.
+
+The optional Jenkins pipeline accepts a published commit SHA image, tests it with its own disposable PostgreSQL volume, and pauses for approval before promotion. The Jenkins agent needs Docker Compose, Node.js, Chromium system dependencies, curl, jq and registry access. Configure `BOOKING_DEPLOY_DIR` as the existing demo Compose directory on that Docker host. Promotion checks the running SHA via `/api/health` and restores the previous image if the check fails. A single app replica may experience a brief interruption during replacement.

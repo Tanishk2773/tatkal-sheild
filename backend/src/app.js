@@ -32,6 +32,14 @@ function seatRequest(body, userId, confirm = false) {
 export function createApp(database, options = {}) {
   const app = express();
   const service = createBookingService(database.pool, options);
+  const admission = new Map();
+  let trainSnapshot;
+  function readTrains() {
+    if (!trainSnapshot) {
+      trainSnapshot = service.listTrains().finally(() => { trainSnapshot = undefined; });
+    }
+    return trainSnapshot;
+  }
   app.disable('x-powered-by');
   app.use(express.json({ limit: '8kb' }));
   app.use('/api', (_req, res, next) => {
@@ -49,19 +57,34 @@ export function createApp(database, options = {}) {
   app.get('/api/live', (_req, res) => res.json({ status: 'ok' }));
   app.get('/api/health', async (_req, res) => {
     await database.pool.query('SELECT 1');
-    res.json({ status: 'ok', phase: 1, storage: database.mode });
+    res.json({ status: 'ok', phase: 1, storage: database.mode, release: process.env.RELEASE_SHA || 'local' });
   });
-  app.get('/api/trains', async (_req, res) => res.json({ trains: await service.listTrains() }));
+  app.get('/api/trains', async (_req, res) => res.json({ trains: await readTrains() }));
   app.get('/api/trains/:id/seats', async (req, res) => {
     if (!/^[1-9]\d*$/.test(req.params.id)) throw new BookingError(400, 'Invalid train ID.');
     res.json(await service.listSeats(positiveInteger(Number(req.params.id), 'trainId')));
   });
   app.post('/api/seats/allocate', requirePassenger, async (req, res) => {
     const { trainId, classCode, preferences } = req.body ?? {};
-    res.status(201).json(await service.holdSeat({
-      trainId: positiveInteger(trainId, 'trainId'),
-      classCode, preferences: preferences ?? [], userId: req.passenger.id, checkoutRequired: true
-    }));
+    const journey = positiveInteger(trainId, 'trainId');
+    if (!['SL', '3A', '2A', '1A'].includes(classCode)) throw new BookingError(400, 'Choose a valid travel class.');
+    const key = journey + ':' + String(classCode);
+    const queue = admission.get(key) ?? new Set();
+    if (queue.size >= 24 || queue.has(req.passenger.id)) {
+      res.set('Retry-After', '2');
+      throw new BookingError(429, 'Booking is busy. Please retry in two seconds.');
+    }
+    queue.add(req.passenger.id);
+    admission.set(key, queue);
+    try {
+      res.status(201).json(await service.holdSeat({
+        trainId: journey, classCode, preferences: preferences ?? [],
+        userId: req.passenger.id, checkoutRequired: true
+      }));
+    } finally {
+      queue.delete(req.passenger.id);
+      if (!queue.size) admission.delete(key);
+    }
   });
   app.post('/api/seats/hold', requirePassenger, async (req, res) => {
     const request = req.body?.seatNos === undefined
