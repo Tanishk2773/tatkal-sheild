@@ -84,36 +84,56 @@ export function createBookingService(pool, { holdSeconds = 300, now = () => Date
     return rows.length > 0;
   }
 
-  async function holdSeat({ trainId, seatNo, userId, checkoutRequired = false }) {
+  async function holdSeat({ trainId, seatNo, seatNos = [seatNo], userId, checkoutRequired = false }) {
+    if (!Array.isArray(seatNos) || seatNos.length < 1 || seatNos.length > 6 ||
+        seatNos.some(seat => !Number.isSafeInteger(seat) || seat < 1) ||
+        new Set(seatNos).size !== seatNos.length) {
+      throw new BookingError(400, 'Choose one to six different seats.');
+    }
+    const selected = [...seatNos].sort((a, b) => a - b);
+    if (selected.some(seat => seatClass(seat) !== seatClass(selected[0]))) {
+      throw new BookingError(400, 'Choose seats in the same class.');
+    }
+
     return transaction(async client => {
-      // A train row lock serializes Phase 1 writes in real PostgreSQL.
-      // The in-memory emulator does not model PostgreSQL locking.
       const train = await getTrain(client, trainId, true);
-      checkSeat(train, seatNo);
-      if (await isSold(client, trainId, seatNo)) throw new BookingError(409, 'This seat is already sold.');
-      const { rows: holds } = await client.query(
-        'SELECT * FROM seat_holds WHERE train_id = $1 AND seat_no = $2', [trainId, seatNo]
-      );
-      const existing = holds[0];
-      if (existing && new Date(existing.expires_at).getTime() > now()) {
-        if (existing.user_id !== userId) {
-          throw new BookingError(409, 'Someone else is holding this seat.');
-        }
-        // Retrying a hold reuses its token and original expiry.
-        return { trainId, seatNo, holdToken: existing.hold_token, expiresAt: existing.expires_at };
+      const active = [];
+      for (const seat of selected) {
+        checkSeat(train, seat);
+        if (await isSold(client, trainId, seat)) throw new BookingError(409, 'Seat ' + seat + ' is already sold.');
+        const { rows: [hold] } = await client.query(
+          'SELECT * FROM seat_holds WHERE train_id=$1 AND seat_no=$2', [trainId, seat]
+        );
+        if (hold && new Date(hold.expires_at).getTime() > now()) active.push(hold);
       }
-      const holdToken = randomUUID();
-      const expiresAt = new Date(now() + holdSeconds * 1000);
-      await client.query('DELETE FROM seat_holds WHERE train_id = $1 AND seat_no = $2', [trainId, seatNo]);
-      await client.query(
-        'INSERT INTO seat_holds (train_id, seat_no, user_id, hold_token, expires_at, checkout_required) VALUES ($1,$2,$3,$4,$5,$6)',
-        [trainId, seatNo, userId, holdToken, expiresAt, checkoutRequired]
-      );
-      return { trainId, seatNo, holdToken, expiresAt };
+
+      let holdToken = randomUUID();
+      let expiresAt = new Date(now() + holdSeconds * 1000);
+      if (active.length) {
+        const first = active[0];
+        const { rows: group } = await client.query(
+          'SELECT seat_no FROM seat_holds WHERE hold_token=$1', [first.hold_token]
+        );
+        if (group.length !== selected.length || active.length !== selected.length ||
+            active.some(hold => hold.user_id !== userId || hold.hold_token !== first.hold_token)) {
+          throw new BookingError(409, 'At least one selected seat is already held. Review your selection.');
+        }
+        holdToken = first.hold_token;
+        expiresAt = first.expires_at;
+      } else {
+        for (const seat of selected) {
+          await client.query('DELETE FROM seat_holds WHERE train_id=$1 AND seat_no=$2', [trainId, seat]);
+          await client.query(
+            'INSERT INTO seat_holds (train_id, seat_no, user_id, hold_token, expires_at, checkout_required) VALUES ($1,$2,$3,$4,$5,$6)',
+            [trainId, seat, userId, holdToken, expiresAt, checkoutRequired || selected.length > 1]
+          );
+        }
+      }
+      return { trainId, seatNo: selected[0], seatNos: selected, holdToken, expiresAt };
     });
   }
 
-  async function releaseHold({ trainId, seatNo, userId, holdToken }) {
+  async function releaseHold({ trainId, userId, holdToken }) {
     return transaction(async client => {
       await getTrain(client, trainId, true);
       const { rows: [order] } = await client.query(
@@ -121,8 +141,8 @@ export function createBookingService(pool, { holdSeconds = 300, now = () => Date
       );
       if (order?.payment_ref) throw new BookingError(409, 'Already paid. Retrieve your ticket.');
       await client.query(
-        'DELETE FROM seat_holds WHERE train_id=$1 AND seat_no=$2 AND user_id=$3 AND hold_token=$4',
-        [trainId, seatNo, userId, holdToken]
+        'DELETE FROM seat_holds WHERE train_id=$1 AND user_id=$2 AND hold_token=$3',
+        [trainId, userId, holdToken]
       );
       return { released: true };
     });
@@ -133,32 +153,57 @@ export function createBookingService(pool, { holdSeconds = 300, now = () => Date
       const train = await getTrain(client, trainId, true);
       checkSeat(train, seatNo);
       const confirmationKey = createHash('sha256').update(holdToken).digest('hex');
-      const { rows: [previous] } = await client.query(
-        'SELECT id, pnr, seat_no, status, user_id, train_id, created_at FROM bookings WHERE train_id = $1 AND user_id = $2 AND confirmation_key = $3',
+      const { rows: previous } = await client.query(
+        'SELECT id, pnr, seat_no, status, user_id, train_id, created_at FROM bookings WHERE train_id=$1 AND user_id=$2 AND confirmation_key=$3 ORDER BY id',
         [trainId, userId, confirmationKey]
       );
-      if (previous) return { booking: previous, train, recovered: true };
-      if (await isSold(client, trainId, seatNo)) throw new BookingError(409, 'This seat is already sold.');
+      if (previous.length) return { booking: previous[0], bookings: previous, train, recovered: true };
+
       const { rows: holds } = await client.query(
-        'SELECT * FROM seat_holds WHERE train_id = $1 AND seat_no = $2', [trainId, seatNo]
+        'SELECT * FROM seat_holds WHERE train_id=$1 AND hold_token=$2 ORDER BY seat_no', [trainId, holdToken]
       );
-      const hold = holds[0];
-      if (!hold || new Date(hold.expires_at).getTime() <= now()) {
-        throw new BookingError(410, 'Your hold expired. Select an available seat again.');
+      if (!holds.length) {
+        if (await isSold(client, trainId, seatNo)) throw new BookingError(409, 'This seat is already sold.');
+        const { rows: [other] } = await client.query(
+          'SELECT expires_at FROM seat_holds WHERE train_id=$1 AND seat_no=$2', [trainId, seatNo]
+        );
+        if (other && new Date(other.expires_at).getTime() > now()) {
+          throw new BookingError(403, 'This hold does not belong to your demo session.');
+        }
+        throw new BookingError(410, 'Your hold expired. Select available seats again.');
       }
-      if (hold.user_id !== userId || hold.hold_token !== holdToken) {
+      if (holds.some(hold => hold.user_id !== userId) || !holds.some(hold => hold.seat_no === seatNo)) {
         throw new BookingError(403, 'This hold does not belong to your demo session.');
       }
-      const { rows: [order] } = await client.query('SELECT id FROM checkout_orders WHERE hold_token=$1', [holdToken]);
-      if ((hold.checkout_required && !checkoutId) || (order && order.id !== checkoutId)) throw new BookingError(409,'Finish the QR checkout first.');
-      const pnr = 'TS-' + randomBytes(6).toString('hex').toUpperCase();
-      const { rows } = await client.query(
-        'INSERT INTO bookings (train_id, seat_no, user_id, pnr, status, confirmation_key, checkout_id) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, pnr, seat_no, status, user_id, train_id, created_at',
-        [trainId, seatNo, userId, pnr, 'CONFIRMED', confirmationKey, checkoutId]
-      );
-      await client.query('DELETE FROM seat_holds WHERE train_id = $1 AND seat_no = $2', [trainId, seatNo]);
-      if (checkoutId) await client.query('UPDATE checkout_orders SET payment_ref=$1 WHERE id=$2', [pnr,checkoutId]);
-      return { booking: rows[0], train };
+      if (holds.some(hold => new Date(hold.expires_at).getTime() <= now())) {
+        throw new BookingError(410, 'Your hold expired. Select available seats again.');
+      }
+      const { rows: [order] } = await client.query('SELECT id, travellers FROM checkout_orders WHERE hold_token=$1', [holdToken]);
+      if ((holds[0].checkout_required || order || checkoutId) && (!checkoutId || order?.id !== checkoutId)) {
+        throw new BookingError(409, 'Finish the QR checkout first.');
+      }
+      if (order?.travellers && (order.travellers.length !== holds.length ||
+          order.travellers.some((traveller, index) => traveller.seatNo !== holds[index].seat_no))) {
+        throw new BookingError(410, 'The seat selection has expired.');
+      }
+
+      // Validate the whole group before writing any booking rows.
+      for (const hold of holds) {
+        if (await isSold(client, trainId, hold.seat_no)) throw new BookingError(409, 'A selected seat is already sold.');
+      }
+      const bookings = [];
+      for (const [index, hold] of holds.entries()) {
+        const pnr = 'TS-' + randomBytes(6).toString('hex').toUpperCase();
+        const traveller = order?.travellers?.[index];
+        const { rows: [booking] } = await client.query(
+          'INSERT INTO bookings (train_id, seat_no, user_id, pnr, status, confirmation_key, checkout_id, traveller, preference) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, pnr, seat_no, status, user_id, train_id, created_at',
+          [trainId, hold.seat_no, userId, pnr, 'CONFIRMED', confirmationKey, checkoutId, traveller?.name ?? null, traveller?.preference ?? null]
+        );
+        bookings.push(booking);
+      }
+      await client.query('DELETE FROM seat_holds WHERE train_id=$1 AND hold_token=$2', [trainId, holdToken]);
+      if (checkoutId) await client.query('UPDATE checkout_orders SET payment_ref=$1 WHERE id=$2', [bookings[0].pnr, checkoutId]);
+      return { booking: bookings[0], bookings, train };
     });
   }
 

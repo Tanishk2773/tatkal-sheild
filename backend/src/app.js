@@ -46,6 +46,7 @@ export function createApp(database, options = {}) {
   mountRailInfo(app);
   mountYoupi(app, database.pool, requirePassenger);
   mountCheckout(app, database.pool, requirePassenger, service);
+  app.get('/api/live', (_req, res) => res.json({ status: 'ok' }));
   app.get('/api/health', async (_req, res) => {
     await database.pool.query('SELECT 1');
     res.json({ status: 'ok', phase: 1, storage: database.mode });
@@ -56,7 +57,10 @@ export function createApp(database, options = {}) {
     res.json(await service.listSeats(positiveInteger(Number(req.params.id), 'trainId')));
   });
   app.post('/api/seats/hold', requirePassenger, async (req, res) => {
-    res.status(201).json(await service.holdSeat({...seatRequest(req.body, req.passenger.id), checkoutRequired:req.body.checkoutRequired === true}));
+    const request = req.body?.seatNos === undefined
+      ? seatRequest(req.body, req.passenger.id)
+      : { trainId: positiveInteger(req.body.trainId, 'trainId'), userId: req.passenger.id, seatNos: req.body.seatNos };
+    res.status(201).json(await service.holdSeat({ ...request, checkoutRequired: req.body.checkoutRequired === true }));
   });
   app.post('/api/seats/release', requirePassenger, async (req, res) => {
     res.json(await service.releaseHold(seatRequest(req.body, req.passenger.id, true)));

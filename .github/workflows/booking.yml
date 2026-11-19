@@ -9,6 +9,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:16
@@ -39,6 +40,18 @@ jobs:
           docker run -d --name booking-stage --network host -e HOST=127.0.0.1 -e DATABASE_URL="$CI_DATABASE_URL" tatkal-shield:candidate
           curl --retry 12 --retry-delay 1 --retry-connrefused --fail http://localhost:3000/api/health | jq -e '.status=="ok" and .storage=="postgres"'
           curl --fail --silent http://localhost:3000/ > /dev/null
+      - name: Run desktop and mobile group checkout against the staging image
+        env:
+          BROWSER_STAGING_ORIGIN: http://localhost:3000
+        run: npm run test:browser
+      - name: Report staging state and clean up
+        if: always()
+        run: |
+          if docker inspect booking-stage > /dev/null 2>&1; then
+            docker inspect --format '{{json .State.Health}}' booking-stage
+            docker logs booking-stage
+            docker stop --time 10 booking-stage
+          fi
       - name: Export tested image for delivery
         if: github.event_name == 'push'
         run: docker save tatkal-shield:candidate | gzip > /tmp/booking-image.tar.gz
@@ -52,6 +65,7 @@ jobs:
     needs: verify
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       packages: write
       contents: read
@@ -68,3 +82,4 @@ jobs:
           docker tag tatkal-shield:candidate "$image"
           echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           docker push "$image"
+          printf 'Published container image `%s`\n' "$image" >> "$GITHUB_STEP_SUMMARY"

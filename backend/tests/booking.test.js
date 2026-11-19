@@ -53,7 +53,7 @@ test('acceptance: list trains → hold → confirm → seat is sold', async t =>
   const health = await request('/api/health');
   assert.equal(health.body.storage, 'demo-memory');
   const trains = await request('/api/trains');
-  assert.equal(trains.body.trains.length, 3);
+  assert.equal(trains.body.trains.length, 9);
   assert.equal(trains.body.trains[0].available, 36);
   const payload = { trainId: 1, seatNo: 1, userId: 'demo-alice' };
   const hold = await request('/api/seats/hold', payload);
@@ -233,4 +233,45 @@ test('released and expired wallet orders cannot issue tickets', async t => {
     else assert.equal((await send('/api/seats/release',hold,account.cookie)).status,200);
     assert.equal((await send('/api/checkout/'+order.id+'/demo-pay',{})).status,410);
   }
+});
+
+
+test('group reservation rejects conflicts without holding a partial group, then pays for every rider once', async t => {
+  const { send, request } = await setup(t);
+  const owner = await send('/api/passenger/register', {
+    name: 'Group Owner', email: 'group@example.test', password: 'test-password-123'
+  });
+  const cookie = owner.cookie;
+  const rival = await request('/api/seats/hold', { trainId: 1, seatNo: 14, userId: 'rival' });
+  assert.equal(rival.status, 201);
+  const select = seats => send('/api/seats/hold', { trainId: 1, seatNos: seats }, cookie);
+  assert.equal((await select([13, 14])).status, 409);
+  const availability = await send('/api/trains/1/seats');
+  assert.equal(availability.body.seats.find(seat => seat.seatNo === 13).status, 'free');
+  assert.equal((await select([13, 13])).status, 400);
+  assert.equal((await select([12, 13])).status, 400);
+  assert.equal((await select([13, 15, 16, 17, 18, 19, 20])).status, 400);
+
+  const { body: hold } = await select([15, 13]);
+  assert.deepEqual(hold.seatNos, [13, 15]);
+  assert.equal((await select([13, 15])).body.holdToken, hold.holdToken);
+  const traveller = { name: 'Asha Rao', age: 28, gender: 'Female', preference: 'Lower' };
+  assert.equal((await send('/api/checkout', { holdToken: hold.holdToken, travellers: [traveller] }, cookie)).status, 400);
+  const { body: order } = await send('/api/checkout', {
+    holdToken: hold.holdToken, travellers: [traveller, { ...traveller, name: 'Kiran Rao' }]
+  }, cookie);
+  const path = '/api/checkout/' + order.id;
+  assert.equal((await send(path)).body.fare, 1680);
+  assert.equal((await send('/api/bookings/confirm', hold, cookie)).status, 409);
+  assert.equal((await send(path + '/demo-pay', {})).status, 200);
+  assert.equal((await send(path + '/demo-pay', {})).status, 200);
+  const { bookings } = (await send('/api/bookings/confirm', hold, cookie)).body;
+  assert.deepEqual(bookings.map(ticket => ticket.seat_no), [13, 15]);
+  assert.equal(new Set(bookings.map(ticket => ticket.pnr)).size, 2);
+  const saved = (await send('/api/passenger/tickets', undefined, cookie)).body.tickets;
+  assert.deepEqual(saved.map(ticket => ticket.traveller).sort(), ['Asha Rao', 'Kiran Rao']);
+  await send('/api/bookings/' + bookings[0].pnr + '/cancel', {}, cookie);
+  const finalSeats = (await send('/api/trains/1/seats')).body.seats;
+  assert.equal(finalSeats.find(seat => seat.seatNo === 13).status, 'free');
+  assert.equal(finalSeats.find(seat => seat.seatNo === 15).status, 'sold');
 });

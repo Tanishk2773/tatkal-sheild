@@ -76,3 +76,9 @@ CREATE TABLE IF NOT EXISTS checkout_orders (
   payment_ref TEXT UNIQUE
 );
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS checkout_id TEXT REFERENCES checkout_orders(id);
+ALTER TABLE seat_holds DROP CONSTRAINT IF EXISTS seat_holds_hold_token_key;
+CREATE INDEX IF NOT EXISTS seat_holds_by_token ON seat_holds (hold_token);
+ALTER TABLE checkout_orders ADD COLUMN IF NOT EXISTS travellers JSONB;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS traveller TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS preference TEXT;
+CREATE INDEX IF NOT EXISTS bookings_by_confirmation ON bookings (train_id, user_id, confirmation_key);

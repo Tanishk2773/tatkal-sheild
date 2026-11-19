@@ -5,54 +5,37 @@ import { BookingError } from './services/booking.js';
 
 export function mountCheckout(app, pool, requirePassenger, service) {
   app.post('/api/checkout', requirePassenger, async (req, res) => {
-    const { holdToken, name, age, gender, preference } = req.body || {};
-    if (
-      typeof name !== 'string' ||
-      !name.trim() ||
-      name.trim().length > 80 ||
-      !Number.isInteger(age) ||
-      age < 1 ||
-      age > 120 ||
-      !['Female', 'Male', 'Other', 'Prefer not to say'].includes(gender) ||
-      ![
-        'No preference',
-        'Lower',
-        'Middle',
-        'Upper',
-        'Side lower',
-        'Side upper',
-      ].includes(preference)
-    ) {
-      throw new BookingError(400, 'Check the traveller details.');
-    }
-    const {
-      rows: [hold],
-    } = await pool.query(
-      'SELECT * FROM seat_holds WHERE hold_token=$1 AND user_id=$2',
-      [holdToken, req.passenger.id],
+    const { holdToken, travellers: submitted } = req.body || {};
+    const { rows: holds } = await pool.query(
+      'SELECT * FROM seat_holds WHERE hold_token=$1 AND user_id=$2 ORDER BY seat_no',
+      [holdToken, req.passenger.id]
     );
-    if (!hold || new Date(hold.expires_at) <= new Date())
-      throw new BookingError(
-        410,
-        'Select an available seat to start a new hold.',
-      );
+    if (!holds.length || holds.some(hold => new Date(hold.expires_at) <= new Date())) {
+      throw new BookingError(410, 'Select available seats to start a new hold.');
+    }
+
+    const details = submitted ?? [req.body];
+    if (!Array.isArray(details) || details.length !== holds.length) {
+      throw new BookingError(400, 'Enter traveller details for every reserved seat.');
+    }
+    const travellers = details.map((entry, index) => {
+      const { name, age, gender, preference } = entry || {};
+      if (typeof name !== 'string' || !name.trim() || name.trim().length > 80 ||
+          !Number.isInteger(age) || age < 1 || age > 120 ||
+          !['Female', 'Male', 'Other', 'Prefer not to say'].includes(gender) ||
+          !['No preference', 'Lower', 'Middle', 'Upper', 'Side lower', 'Side upper'].includes(preference)) {
+        throw new BookingError(400, 'Check the details for traveller ' + (index + 1) + '.');
+      }
+      return { seatNo: holds[index].seat_no, name: name.trim(), age, gender, preference };
+    });
+    const hold = holds[0];
     const cabin = seatClass(hold.seat_no);
+    const first = travellers[0];
     await pool.query(
-      'INSERT INTO checkout_orders (id,hold_token,user_id,train_id,seat_no,travel_class,fare,traveller,age,gender,preference,expires_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT (hold_token) DO NOTHING',
-      [
-        randomUUID(),
-        holdToken,
-        req.passenger.id,
-        hold.train_id,
-        hold.seat_no,
-        cabin.code,
-        cabin.fare,
-        name.trim(),
-        age,
-        gender,
-        preference,
-        hold.expires_at,
-      ],
+      'INSERT INTO checkout_orders (id,hold_token,user_id,train_id,seat_no,travel_class,fare,traveller,age,gender,preference,expires_at,travellers) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) ON CONFLICT (hold_token) DO NOTHING',
+      [randomUUID(), holdToken, req.passenger.id, hold.train_id, hold.seat_no, cabin.code,
+        cabin.fare * travellers.length, first.name, first.age, first.gender, first.preference, hold.expires_at,
+        JSON.stringify(travellers)]
     );
     const {
       rows: [order],
@@ -75,6 +58,7 @@ export function mountCheckout(app, pool, requirePassenger, service) {
     const o = await orderFor(req);
     res.json({
       fare: o.fare,
+      seatCount: o.travellers?.length ?? 1,
       travelClass: o.travel_class,
       expiresAt: o.expires_at,
       paid: Boolean(o.payment_ref),

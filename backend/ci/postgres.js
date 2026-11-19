@@ -26,6 +26,21 @@ try {
   const replacement = await service.holdSeat({ trainId: 1, seatNo: 2, userId });
   const rebooked = await service.confirmBooking({ ...replacement, userId });
   assert.notEqual(rebooked.booking.pnr, pnr);
+  const groupRequests = [
+    { trainId: 1, userId: 'ci-group-a', seatNos: [13, 14] },
+    { trainId: 1, userId: 'ci-group-b', seatNos: [14, 15] }
+  ];
+  const groups = await Promise.allSettled(groupRequests.map(request => service.holdSeat(request)));
+  const loser = groups.findIndex(result => result.status === 'rejected');
+  assert.ok(loser >= 0);
+  assert.equal(groups[loser].reason.status, 409);
+  const winner = groups[1 - loser];
+  assert.equal(winner.status, 'fulfilled');
+  const loserOnlySeat = loser === 0 ? 13 : 15;
+  const { seats } = await service.listSeats(1);
+  assert.equal(seats.find(seat => seat.seatNo === loserOnlySeat).status, 'free');
+  await service.releaseHold({ ...winner.value, userId: groupRequests[1 - loser].userId });
+  console.log('PostgreSQL rejected one overlapping group hold and left its non-overlapping seat free.');
   console.log('PostgreSQL verified seat contention, PNR recovery, seat changes and rebooking after cancellation.');
 } finally {
   await db.pool.end();

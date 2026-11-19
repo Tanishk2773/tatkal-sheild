@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="/css/styles.css?v=10">
   <link rel="stylesheet" href="/css/checkout.css">
   <link rel="stylesheet" href="/css/passenger.css">
-  <script src="/js/app.js?v=12" type="module"></script>
+  <script src="/js/app.js?v=13" type="module"></script>
   <script type="module" src="/js/arrival.js"></script>
 
 </head>
@@ -72,7 +72,7 @@
         <p id="railkit-results" hidden></p><button id="reload" class="text-button" type="button">↻ Refresh availability</button>
       </section>
       <section class="panel seats-panel" hidden aria-labelledby="seats-heading" aria-busy="true">
-        <div class="section-heading"><div><p class="eyebrow">SEAT SELECTION</p><h2 tabindex="-1" id="seats-heading">Choose your seat</h2></div><span class="coach-badge">COACH S1</span></div>
+        <div class="section-heading"><div><p class="eyebrow">SEAT SELECTION</p><h2 tabindex="-1" id="seats-heading">Choose seats</h2></div><span class="coach-badge">COACH S1</span></div>
         <p id="journey-label" class="subtle">Choose a train to see its seats.</p>
         <div id="classes" class="class-options" aria-label="Travel class"></div>
         <div class="legend"><span><i class="free-dot"></i>Available</span><span><i class="held-dot"></i>Held</span><span><i class="sold-dot"></i>Sold</span></div>
@@ -85,25 +85,31 @@
           <div><span id="hold-caption" class="eyebrow">RESERVED FOR YOU</span><p>Seat <strong id="held-seat"></strong> <span id="expiry"> &middot; <span id="hold-timer" class="timer"></span> left</span></p></div>
           <button id="confirm" class="primary-button" type="button">Confirm mock booking <span aria-hidden="true">→</span></button>
         </div>
-        <p class="seat-help">Select an available seat to hold it for 5 minutes. Passenger sign-in is required to reserve a seat.</p>
+        <p class="seat-help">Choose up to six available seats in one class. Your selection is held for five minutes after you continue.</p>
+        <div class="seat-selection"><p id="selection-summary" role="status"></p><button id="reserve-seats" class="primary-button" type="button" disabled>Reserve selected seats →</button></div>
       </section>
     </div>
     <section class="panel flow-page" id="traveller" hidden>
       <p class="eyebrow">PASSENGER DETAILS</p><h2 tabindex="-1">Who is travelling?</h2><p class="trip-summary"></p>
       <form id="traveller-form" class="checkout-form">
+        <div id="traveller-fields"></div>
+        <p class="subtle">Use fictional details for this demo. Berth preferences are requests.</p>
+        <button class="primary-button">Continue to payment →</button>
+      </form></section>
+    <template id="traveller-fields-template">
+      <fieldset class="traveller-fields"><legend></legend><div class="checkout-form">
         <label>Passenger name<input name="name" required maxlength="80" autocomplete="off"></label>
         <label>Age in years<input name="age" type="number" min="1" max="120" required></label>
         <label>Gender<select name="gender" required><option value="">Choose</option><option>Female</option><option>Male</option><option>Other</option><option>Prefer not to say</option></select></label>
         <label>Berth preference<select name="preference"><option>No preference</option><option>Lower</option><option>Middle</option><option>Upper</option><option>Side lower</option><option>Side upper</option></select></label>
-        <p class="subtle">Use fictional details for this demo. Berth preferences are requests.</p>
-        <button class="primary-button">Continue to payment →</button>
-      </form></section>
+      </div></fieldset>
+    </template>
     <section class="panel flow-page" id="payment" hidden><p class="eyebrow">DEMO WALLET</p><h2 tabindex="-1">Pay for your journey</h2><p class="trip-summary"></p>
       <img id="pay-qr" width="200" height="200" alt="Scan to open the demo wallet"><p>Scan on a device that can reach this site, or pay here with demo funds.</p>
       <button id="pay-now" class="primary-button">Pay with demo wallet</button><button id="check-paid" class="text-button">Retrieve paid ticket</button>
       <div id="youpi-option" hidden><button id="open-youpi" type="button" class="text-button">Open YouPI sandbox</button><p class="subtle">Use the demo wallet to issue a Tatkal Shield ticket.</p></div></section>
     <section id="ticket" class="ticket panel" aria-labelledby="ticket-title" tabindex="-1" hidden>
-      <div class="ticket-main"><p class="eyebrow">YOU'RE ALL ABOARD</p><h2 id="ticket-title">Booking confirmed.</h2><p id="ticket-route"></p><p id="ticket-departure" class="subtle"></p><p class="subtle">Mock ticket · No payment collected · Not valid for travel</p></div>
+      <div class="ticket-main"><p class="eyebrow">YOU'RE ALL ABOARD</p><h2 id="ticket-title">Booking confirmed.</h2><p id="ticket-route"></p><p id="ticket-departure" class="subtle"></p><ul id="group-tickets" hidden></ul><p class="subtle">Mock ticket · No payment collected · Not valid for travel</p></div>
       <div class="ticket-stub"><span class="confirmed">CONFIRMED</span><p class="eyebrow">DEMO PNR</p><strong id="ticket-pnr"></strong><p><span id="receipt-class"></span> · SEAT <strong id="ticket-seat"></strong></p></div>
     </section>
     <section id="guide" class="editorial" aria-labelledby="guide-title">

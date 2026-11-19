@@ -11,6 +11,9 @@ let pendingRequests = 0;
 let passenger = null;
 let registerMode = false;
 let resumeSeat = null;
+const selectedSeats = new Set();
+const seatsInHold = hold => hold.seatNos || [hold.seatNo];
+const formatSeats = values => values.map(seat => String(seat).padStart(2, '0')).join(', ');
 try { $('drop-response').checked = sessionStorage.getItem('tatkal-drill') === 'on'; } catch {}
 $('drop-response').addEventListener('change', () => {
   try { sessionStorage.setItem('tatkal-drill',$('drop-response').checked ? 'on' : 'off'); } catch {}
@@ -181,17 +184,36 @@ function renderSeats() {
     const button = element('button','class-choice', c.name + ' · ₹' + c.fare + ' · ' + seats.filter(s => s.status === 'free').length + ' free');
     button.setAttribute('aria-pressed', String(active === c));
     button.disabled = !seats.length || Boolean(state.hold);
-    button.onclick = () => { selectedClass = c.code; remember(); renderSeats(); };
+    button.onclick = () => { if (selectedClass !== c.code) selectedSeats.clear(); selectedClass = c.code; remember(); renderSeats(); };
     return button;
   }));
+  for (const seat of state.seats) {
+    if (seat.status !== 'free' && !state.busy) selectedSeats.delete(seat.seatNo);
+  }
+  const selection = formatSeats([...selectedSeats].sort((a, b) => a - b));
+  const summary = selectedSeats.size
+    ? selectedSeats.size + ' selected · ' + selection + ' · ₹' + (selectedSeats.size * active.fare)
+    : 'No seats selected';
+  if ($('selection-summary').textContent !== summary) $('selection-summary').textContent = summary;
+  $('reserve-seats').disabled = !selectedSeats.size || state.busy || Boolean(state.hold);
   for (const seat of state.seats.filter(s => seatClass(s.seatNo) === active)) {
-    const mine = state.hold?.trainId === state.trainId && state.hold?.seatNo === seat.seatNo && seat.status === 'held';
-    const button = element('button', 'seat ' + seat.status + (mine ? ' mine' : ''), String(seat.seatNo).padStart(2, '0'));
+    const mine = state.hold?.trainId === state.trainId && seatsInHold(state.hold).includes(seat.seatNo) && seat.status === 'held';
+    const selected = selectedSeats.has(seat.seatNo);
+    const button = element('button', 'seat ' + seat.status + (mine ? ' mine' : '') + (selected ? ' selected' : ''), String(seat.seatNo).padStart(2, '0'));
     button.type = 'button';
     button.disabled = seat.status !== 'free' || state.busy || Boolean(state.hold);
     button.setAttribute('aria-label', 'Seat ' + seat.seatNo + ', ' + (mine ? 'held by you' : seat.status));
     button.title = mine ? 'Your seat hold' : seat.status === 'free' ? 'Hold seat ' + seat.seatNo : seat.status;
-    button.addEventListener('click', () => holdSeat(seat.seatNo));
+    button.setAttribute('aria-pressed', String(selected));
+    button.onclick = () => {
+      if (selected) selectedSeats.delete(seat.seatNo);
+      else if (selectedSeats.size === 6) {
+        message('You can reserve up to six seats in one booking.');
+        return;
+      } else selectedSeats.add(seat.seatNo);
+      renderSeats();
+      $('seat-grid').querySelector('[aria-label="' + button.getAttribute('aria-label') + '"]')?.focus();
+    };
     $('seat-grid').append(button);
   }
   document.querySelector('.seats-panel').setAttribute('aria-busy', String(state.busy));
@@ -202,7 +224,7 @@ function renderHold() {
   const hold = state.hold;
   $('hold-panel').hidden = !hold;
   if (!hold) return;
-  $('held-seat').textContent = String(hold.seatNo).padStart(2, '0');
+  $('held-seat').textContent = formatSeats(seatsInHold(hold));
   $('confirm').disabled = state.busy;
   $('confirm').textContent = hold.pending ? 'Retrieve confirmation →' : 'Confirm mock booking →';
   $('hold-caption').textContent = hold.pending ? 'CHECKING CONFIRMATION' : 'RESERVED FOR YOU';
@@ -229,6 +251,7 @@ async function selectTrain(id) {
     message('You have an active hold. Confirm it or wait for its five-minute expiry before changing trains.');
     return;
   }
+  if (state.trainId !== id) selectedSeats.clear();
   state.trainId = id;
   state.seats = [];
   state.busy = true;
@@ -258,10 +281,12 @@ async function refresh() {
   }
 }
 
-async function holdSeat(seatNo) {
+$('reserve-seats').onclick = () => holdSeat([...selectedSeats]);
+
+async function holdSeat(seatNos) {
   if (state.busy || state.hold) return;
   if (!passenger) {
-    resumeSeat = { trainId: state.trainId, seatNo };
+    resumeSeat = { trainId: state.trainId, seatNos };
     openPassenger();
     return;
   }
@@ -269,16 +294,17 @@ async function holdSeat(seatNo) {
   renderSeats();
   renderTrains();
   try {
-    const hold = await api('/seats/hold', { trainId: state.trainId, seatNo, checkoutRequired: true });
+    const hold = await api('/seats/hold', { trainId: state.trainId, seatNos, checkoutRequired: true });
     saveHold(hold);
-    $('traveller-form').reset();
+    selectedSeats.clear();
+    $('traveller-fields').replaceChildren();
     go('traveller');
-    message('Seat ' + seatNo + ' is held for you. Confirm within five minutes.', true);
+    message('Reserved seats ' + formatSeats(seatsInHold(hold)) + '. Complete checkout within five minutes.', true);
     await loadSeats();
   } catch (error) {
     if (error.status === 401) {
       passenger = null;
-      resumeSeat = { trainId: state.trainId, seatNo };
+      resumeSeat = { trainId: state.trainId, seatNos };
       openPassenger();
     }
     message(error.message);
@@ -290,6 +316,13 @@ async function holdSeat(seatNo) {
   }
 }
 
+function renderGroupTickets(tickets) {
+  const list = $('group-tickets');
+  list.hidden = tickets.length < 2;
+  list.replaceChildren(...tickets.map(ticket => element('li', '', 'Seat ' +
+    formatSeats([ticket.seat_no]) + ' · ' + ticket.pnr + (ticket.status === 'CANCELLED' ? ' · Cancelled' : ''))));
+}
+
 $('confirm').addEventListener('click', async () => {
   if (!state.hold?.checkoutId || state.busy) return;
   const hold = state.hold;
@@ -299,7 +332,7 @@ $('confirm').addEventListener('click', async () => {
   try {
     if (!(await api('/checkout/' + hold.checkoutId)).paid) { message('Complete your demo wallet payment first.'); return; }
     saveHold({ ...hold, pending: true });
-    const { booking, train, recovered } = await api('/bookings/confirm', hold);
+    const { booking, bookings, train, recovered } = await api('/bookings/confirm', hold);
     if (!hold.pending && $('drop-response').checked) {
       $('drop-response').checked = false;
       try { sessionStorage.removeItem('tatkal-drill'); } catch {}
@@ -319,6 +352,7 @@ $('confirm').addEventListener('click', async () => {
     $('ticket-departure').textContent = departure(train.departure);
     $('ticket-pnr').textContent = booking.pnr;
     $('ticket-seat').textContent = String(booking.seat_no).padStart(2, '0');
+    renderGroupTickets(bookings);
     $('ticket').hidden = false;
     $('receipt-class').textContent = seatClass(booking.seat_no).name;
     go('receipt');
@@ -374,6 +408,7 @@ async function boot() {
     const {tickets} = await api('/passenger/tickets');
     const ticket = tickets.find(t => t.pnr === history.state.pnr && t.status === 'CONFIRMED');
     if (ticket) {
+      renderGroupTickets(ticket.checkout_id ? tickets.filter(t => t.checkout_id === ticket.checkout_id).reverse() : [ticket]);
       $('ticket-route').textContent = ticket.name + ' · ' + ticket.source + ' → ' + ticket.destination;
       $('ticket-departure').textContent = departure(ticket.departure);
       $('ticket-pnr').textContent = ticket.pnr;
@@ -446,6 +481,7 @@ $('journey-form').addEventListener('submit', async event => {
     }
     state.trains = data.trains;
     query = nextQuery;
+    selectedSeats.clear();
     state.trainId = null;
     state.seats = [];
     $('ticket').hidden = true;
@@ -490,7 +526,7 @@ function ticketCard(ticket) {
     element('p', '', departure(ticket.departure)),
     element('p', '', (ticket.travel_class || 'Coach S1') + ' · Seat ' + ticket.seat_no + ' · ' + (cancelled ? 'Cancelled' : 'Confirmed'))
   );
-  if (ticket.traveller) details.append(element('p','subtle', ticket.traveller + ' · ₹' + ticket.fare + ' · ' + ticket.preference));
+  if (ticket.traveller) details.append(element('p','subtle', ticket.traveller + ' · ₹' + seatClass(ticket.seat_no).fare + ' · ' + ticket.preference));
   item.append(
     element('strong', '', ticket.source + ' → ' + ticket.destination),
     element('span', 'saved-ticket-status', cancelled ? 'Cancelled' : 'Confirmed'),
@@ -627,7 +663,7 @@ $('passenger-form').addEventListener('submit', async event => {
     if (state.hold || target) {
       $('passenger-dialog').close();
       if (state.hold) await boot();
-      else if (target.trainId === state.trainId) await holdSeat(target.seatNo);
+      else if (target.trainId === state.trainId) await holdSeat(target.seatNos);
     } else {
       await loadTickets();
     }
@@ -690,10 +726,19 @@ function syncPage() {
   for (const id of ['traveller','payment']) $(id).hidden = id !== page;
   if (state.hold) {
     const c = seatClass(state.hold.seatNo);
+    const seats = seatsInHold(state.hold);
+    const total = seats.length * c.fare;
     const train = state.trains.find(t => t.id === state.hold.trainId);
-    for (const el of document.querySelectorAll('.trip-summary')) el.textContent = [train?.name,c.name,'Seat '+state.hold.seatNo,'₹'+c.fare].filter(Boolean).join(' · ');
+    for (const el of document.querySelectorAll('.trip-summary')) el.textContent = [train?.name,c.name,'Seats '+formatSeats(seats),'₹'+total].filter(Boolean).join(' · ');
+    if (page === 'traveller' && !$('traveller-fields').children.length) {
+      for (const seat of seats) {
+        const fieldset = $('traveller-fields-template').content.cloneNode(true);
+        fieldset.querySelector('legend').textContent = 'Passenger for seat ' + formatSeats([seat]);
+        $('traveller-fields').append(fieldset);
+      }
+    }
     if (page === 'payment') {
-      $('pay-now').textContent = 'Pay ₹' + c.fare + ' with demo wallet';
+      $('pay-now').textContent = 'Pay ₹' + total + ' with demo wallet';
       $('pay-qr').src = '/api/checkout/' + state.hold.checkoutId + '/qr';
     }
   }
@@ -710,7 +755,7 @@ $('release-hold').onclick = async () => {
   try {
     await api('/seats/release', state.hold);
     saveHold(null);
-    $('traveller-form').reset();
+    $('traveller-fields').replaceChildren();
     message('Seat released. You can change your journey or choose another seat.', true);
     go('coach');
     await loadSeats();
@@ -721,11 +766,14 @@ $('traveller-form').onsubmit = async e => {
   e.preventDefault();
   if (!state.hold || state.busy) return;
   const form = e.currentTarget;
-  const values = Object.fromEntries(new FormData(form));
+  const travellers = [...form.querySelectorAll('fieldset')].map(fieldset => {
+    const values = Object.fromEntries([...fieldset.querySelectorAll('input, select')].map(input => [input.name, input.value]));
+    return { ...values, age: Number(values.age) };
+  });
   state.busy = true;
   form.querySelector('button').disabled = true;
   try {
-    const order = await api('/checkout',{...values,age:Number(values.age),holdToken:state.hold.holdToken});
+    const order = await api('/checkout',{travellers,holdToken:state.hold.holdToken});
     saveHold({...state.hold,checkoutId:order.id});
     form.reset();
     go('payment');

@@ -6,10 +6,11 @@ import assert from 'node:assert/strict';
 import { createApp } from '../src/app.js';
 import { createDatabase } from '../src/db.js';
 
-const database = await createDatabase();
-const server = createApp(database).listen(0, '127.0.0.1');
-await once(server, 'listening');
-const origin = 'http://127.0.0.1:' + server.address().port;
+const stagingOrigin = process.env.BROWSER_STAGING_ORIGIN;
+const database = stagingOrigin ? null : await createDatabase();
+const server = database && createApp(database).listen(0, '127.0.0.1');
+if (server) await once(server, 'listening');
+const origin = stagingOrigin || 'http://127.0.0.1:' + server.address().port;
 let browser;
 try {
   browser = await chromium.launch({
@@ -37,6 +38,9 @@ try {
     await step('coach');
     await page.locator('.class-choice').nth(1).click();
     await page.locator('.seat.free').first().click();
+    await page.locator('.seat.free:not(.selected)').first().click();
+    assert.match(await page.locator('#selection-summary').innerText(), /2 selected/);
+    await page.locator('#reserve-seats').click();
     await page.locator('#passenger-switch').click();
     await page.locator('#passenger-name').fill('Test Rider');
     await page
@@ -45,10 +49,15 @@ try {
     await page.locator('#passenger-password').fill('test-passphrase-123');
     await page.locator('#passenger-submit').click();
     await step('traveller');
-    await page.locator('#traveller-form [name=name]').fill('Sample Rider');
-    await page.locator('[name=age]').fill('25');
-    await page.locator('[name=gender]').selectOption('Other');
-    await page.locator('[name=preference]').selectOption('Lower');
+    const travellers = page.locator('.traveller-fields');
+    assert.equal(await travellers.count(), 2);
+    for (let i = 0; i < 2; i++) {
+      const person = travellers.nth(i);
+      await person.locator('[name=name]').fill('Sample Rider ' + (i + 1));
+      await person.locator('[name=age]').fill('25');
+      await person.locator('[name=gender]').selectOption('Other');
+      await person.locator('[name=preference]').selectOption('Lower');
+    }
     await page.locator('#traveller-form button').click();
     await step('payment');
     await page.reload();
@@ -57,7 +66,7 @@ try {
       await page
         .locator('#pay-now')
         .innerText()
-        .then((x) => x.includes('840')),
+        .then((x) => x.includes('1680')),
     );
     if (width === 1280) {
       const response = await page.request.get(
@@ -87,10 +96,14 @@ try {
       await page.locator('#check-paid').click();
     }
     await step('receipt');
+    const pnrs = await page.locator('#group-tickets li').allTextContents();
+    assert.equal(pnrs.length, 2);
+    assert.notEqual(pnrs[0], pnrs[1]);
     const pnr = await page.locator('#ticket-pnr').innerText();
     await page.reload();
     await step('receipt');
     assert.equal(await page.locator('#ticket-pnr').innerText(), pnr);
+    assert.deepEqual(await page.locator('#group-tickets li').allTextContents(), pnrs);
     assert.ok(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,
@@ -99,7 +112,7 @@ try {
     );
     await page.locator('#passenger-open').click();
     await page.locator('.saved-ticket summary').first().click();
-    await page.getByText('Sample Rider', { exact: false }).waitFor();
+    await page.getByText('Sample Rider 2', { exact: false }).waitFor();
     await page.getByRole('button', { name: 'Change seat' }).click();
     await page.getByRole('button', { name: 'Save seat change' }).click();
     await page.getByText('Seat changed. Your PNR is the same.').waitFor();
@@ -117,7 +130,7 @@ try {
   }
 } finally {
   await browser?.close();
-  await new Promise((resolve) => server.close(resolve));
-  await database.pool.end();
+  if (server) await new Promise((resolve) => server.close(resolve));
+  await database?.pool.end();
 }
 

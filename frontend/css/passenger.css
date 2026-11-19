@@ -59,3 +59,19 @@ h1, h2, .journey h2, .editorial-heading h2 {
 #lookup { grid-template-columns: 1fr; }
 #lookup-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr)); gap: 12px; }
 .booking-home figcaption { background: #102942; font: 13px/1.4 "Segoe UI", system-ui, sans-serif; }
+
+.topbar nav a, .account-trigger { font-size: 1rem; font-weight: 650; }
+.topbar nav a { padding: .55rem 0; }
+.topbar nav { gap: clamp(12px, 3vw, 34px); }
+.account-trigger { padding: .55rem 1rem; }
+.seat.selected { background: #184e81; color: white; border-color: #184e81; }
+.seat.selected:hover:not(:disabled) { background: #103c65; }
+.seat-selection { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; border-top: 1px solid var(--border); margin-top: 14px; padding-top: 12px; }
+.seat-selection p { margin: 0; font-weight: 650; }
+#traveller-fields { grid-column: 1 / -1; display: grid; gap: 14px; min-width: 0; }
+.traveller-fields { min-width: 0; margin: 0; border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+.traveller-fields legend { padding: 0 6px; font-weight: 700; }
+@media (max-width: 520px) {
+  .topbar nav { justify-content: space-between; }
+  .topbar nav a { font-size: .95rem; }
+}
