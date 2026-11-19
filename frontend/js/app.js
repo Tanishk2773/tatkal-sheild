@@ -53,7 +53,11 @@ async function api(path, body) {
     });
     const data = await response.json();
     if (!response.ok) {
-      const error = new Error(data.error || 'Request failed. Try again.');
+      const missingAllocationRoute = path === '/seats/allocate' && response.status === 404 &&
+        data.error === 'API endpoint not found.';
+      const error = new Error(missingAllocationRoute
+        ? 'This server needs an update to assign berths. Restart Tatkal Shield with npm start and reopen the Local address it prints.'
+        : data.error || 'Request failed. Try again.');
       error.status = response.status;
       throw error;
     }
