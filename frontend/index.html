@@ -32,7 +32,7 @@
     <div id="passenger-profile" hidden>
       <p id="passenger-email"></p>
       <h3>My tickets</h3>
-      <p class="subtle">Seat changes and cancellations apply to demo tickets. For real tickets, see the <a href="https://contents.irctc.co.in/en/TatkalFaq.html">IRCTC Tatkal FAQ</a>.</p>
+      <p class="subtle">Cancellations here apply to demo tickets. For real tickets, see the <a href="https://contents.irctc.co.in/en/TatkalFaq.html">IRCTC Tatkal FAQ</a>.</p>
       <ul id="passenger-tickets"></ul>
       <button id="passenger-logout" class="primary-button" type="button">Sign out</button>
     </div>
@@ -73,7 +73,7 @@
     <div class="request-rail" role="presentation"><i></i></div>
     <nav class="flow-nav" id="flow-nav" hidden aria-label="Booking progress">
       <ol id="flow-progress">
-        <li>Train</li><li>Seats</li><li>Passengers</li><li>Payment</li><li>Tickets</li>
+        <li>Train</li><li>Class</li><li>Passengers</li><li>Payment</li><li>Tickets</li>
       </ol>
       <div class="flow-actions">
         <a href="#journey">← Journey planner</a>
@@ -101,25 +101,19 @@
       </section>
       <section class="seats-panel booking-columns" hidden aria-labelledby="seats-heading" aria-busy="true">
         <div class="panel stage-content">
-        <div class="section-heading"><h2 tabindex="-1" id="seats-heading">Choose seats</h2><span class="coach-badge"></span></div>
-        <p id="journey-label" class="subtle">Choose a train to see its seats.</p>
+        <div class="section-heading"><h2 tabindex="-1" id="seats-heading">Choose a travel class</h2><span class="coach-badge"></span></div>
+        <p id="journey-label" class="subtle">Choose a train to see class availability.</p>
         <div id="classes" class="class-options" aria-label="Travel class"></div>
-        <div class="legend"><span><i class="free-dot"></i>Available</span><span><i class="held-dot"></i>Held</span><span><i class="sold-dot"></i>Sold</span></div>
-        <div class="coach">
-          <div class="coach-end"><span>← ENGINE</span><span>EXIT →</span></div>
-          <div id="seat-grid" class="seat-grid" aria-label="Coach seats"></div>
-          <p class="coach-caption">WINDOW · AISLE · WINDOW</p>
-        </div>
         <div id="hold-panel" class="hold-panel" hidden>
           <div><span id="hold-caption" class="eyebrow">RESERVED FOR YOU</span><p>Seat <strong id="held-seat"></strong> <span id="expiry"> &middot; <span id="hold-timer" class="timer"></span> left</span></p></div>
           <button id="confirm" class="primary-button" type="button">Confirm mock booking <span aria-hidden="true">→</span></button>
         </div>
-        <p class="seat-help">Choose one seat per passenger in the same class. The five-minute hold starts when you reserve the seats.</p>
+        <p class="seat-help">Enter each passenger’s berth preference on the next screen. Available berths are assigned automatically and seat numbers appear on confirmed tickets.</p>
         </div>
         <aside class="panel journey-summary seat-selection">
-          <h2>Seat selection</h2>
+          <h2>Class availability</h2>
           <p id="selection-summary" role="status"></p>
-          <button id="reserve-seats" class="primary-button" type="button" disabled>Reserve selected seats →</button>
+          <button id="reserve-seats" class="primary-button" type="button" disabled>Enter passenger details →</button>
         </aside>
       </section>
     </div>
@@ -173,7 +167,7 @@
       </header>
       <ol class="journey-stops">
         <li><h3>Find a departure</h3><p>Choose your stations and journey date. Each matching train shows its departure time in IST and how many seats are free.</p></li>
-        <li><h3>Hold your seat</h3><p>Pick an available seat from the coach map. The five-minute timer shows how long that seat is reserved for you.</p></li>
+        <li><h3>Request a berth</h3><p>Choose a class and enter each passenger’s berth preference. Available berths are held for five minutes while you pay.</p></li>
         <li><h3>Collect your ticket</h3><p>Enter traveller details, pay with demo funds and collect your PNR. If the reply disappears, your browser can retrieve the confirmation.</p></li>
       </ol>
     </section>
@@ -222,7 +216,7 @@
         <h2 id="questions-title">Good to know.</h2>
       </header>
       <div class="question-list">
-        <details><summary>What happens when my seat hold expires?</summary><p>The seat becomes available again. Choose an available seat to start a new hold.</p></details>
+        <details><summary>What happens when my seat hold expires?</summary><p>The seat becomes available again. Enter passenger details again to request a new hold.</p></details>
         <details><summary>Which date should I use for the demo?</summary><p>The planner starts with the first date in the demo timetable. If a search comes up empty, check the scheduled date below the search fields.</p></details>
         <details><summary>Can I travel using this PNR?</summary><p>Tatkal Shield issues mock tickets for the college showcase. For travel you need a ticket from an official booking channel.</p></details>
       </div>

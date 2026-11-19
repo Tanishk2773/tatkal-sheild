@@ -53,17 +53,6 @@ try {
     await page.locator('.train-card').first().click();
     await step('coach');
     await page.locator('.class-choice').nth(1).click();
-    const reserve = page.locator('#reserve-seats');
-    for (let i = 0; i < count; i++) {
-      assert.equal(await reserve.isEnabled(), false);
-      const freeSeat = page.locator('.seat.free:not(.selected)').first();
-      if (i === 0) {
-        await freeSeat.focus();
-        await page.keyboard.press('Space');
-        assert.ok(await page.locator('.seat.selected').first().evaluate(seat => seat === document.activeElement));
-      } else await freeSeat.click();
-    }
-    assert.match(await page.locator('#selection-summary').innerText(), new RegExp(count + ' of ' + count + ' selected'));
     await page.locator('#reserve-seats').click();
     await page.locator('#passenger-switch').click();
     await page.locator('#passenger-name').fill('Test Rider');
@@ -80,7 +69,7 @@ try {
       await person.locator('[name=name]').fill('Sample Rider ' + (i + 1));
       await person.locator('[name=age]').fill('25');
       await person.locator('[name=gender]').selectOption('Other');
-      await person.locator('[name=preference]').selectOption('Lower');
+      await person.locator('[name=preference]').selectOption(i === 0 && width === 1280 ? 'Side lower' : 'Lower');
     }
     const displayTotal = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(840 * count);
     assert.equal(await page.locator('#traveller [data-summary=total]').innerText(), displayTotal);
@@ -125,6 +114,7 @@ try {
       await page.locator('#pay-now').click();
     }
     await step('receipt');
+    if (width === 1280) assert.equal(await page.locator('#ticket-seat').innerText(), '19');
     const pnrs = await page.locator('#group-tickets li').allTextContents();
     assert.equal(pnrs.length, count);
     assert.equal(new Set(pnrs.map(text => text.match(/TS-[A-F0-9]+/)[0])).size, count);
@@ -141,10 +131,7 @@ try {
     );
     await page.locator('#passenger-open').click();
     await page.locator('.saved-ticket summary').first().click();
-    await page.getByText('Sample Rider ' + count, { exact: false }).waitFor();
-    await page.getByRole('button', { name: 'Change seat' }).click();
-    await page.getByRole('button', { name: 'Save seat change' }).click();
-    await page.getByText('Seat changed. Your PNR is the same.').waitFor();
+    await page.locator('.saved-ticket').first().getByText(/Sample Rider [1-6]/).waitFor();
     page.once('dialog', (d) => d.accept());
     await page.getByRole('button', { name: 'Cancel ticket' }).click();
     await page
@@ -167,7 +154,7 @@ try {
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'jury overflow ' + width);
     assert.deepEqual(errors, []);
     console.log(
-      width + 'px, ' + count + ' passenger(s): checkout, reload, ticket changes, cancellation and jury walkthrough passed',
+      width + 'px, ' + count + ' passenger(s): automatic berth assignment, checkout, reload, cancellation and jury walkthrough passed',
     );
     await ctx.close();
   }

@@ -6,7 +6,7 @@ const scenarios = {
     ['Reject', 'The losing group leaves with no partial hold', 'The second group gets a conflict because seat 14 is sold. Seat 15 remains available. No partial group booking is created.']
   ],
   recovery: [
-    ['Hold', 'Choose seats for each traveller', 'One shared hold token covers the group. The server checks that all selected seats are still free.'],
+    ['Hold', 'Assign berths for each traveller', 'One shared hold token covers the group. The server assigns available seats and tries to honor berth preferences.'],
     ['Price', 'The server calculates the fare', 'The server calculates the group total using the selected class and traveller count. The QR opens the demo wallet.'],
     ['Commit', 'Create one ticket per passenger', 'A PostgreSQL transaction writes the tickets, releases the holds and marks the local demo order paid.'],
     ['Drop', 'The browser loses its confirmation response', 'The Operations Lab simulates a network interruption after the booking commits. The tickets still exist in PostgreSQL.'],

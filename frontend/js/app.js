@@ -11,7 +11,6 @@ let pendingRequests = 0;
 let passenger = null;
 let registerMode = false;
 let resumeSeat = null;
-const selectedSeats = new Set();
 const passengerCount = () => query?.passengers || 1;
 const seatsInHold = hold => hold.seatNos || [hold.seatNo];
 const formatSeats = values => values.map(seat => String(seat).padStart(2, '0')).join(', ');
@@ -174,7 +173,7 @@ function renderTrains() {
     const route = element('span', 'train-route');
     route.append(element('span', '', train.source), element('span', 'route-connection', ' → '), element('span', '', train.destination));
     const availability = element('span', 'train-availability');
-    availability.append(element('span', 'availability-count', train.available + ' seats available'), element('span', 'seat-link', 'Choose seats →'));
+    availability.append(element('span', 'availability-count', train.available + ' seats available'), element('span', 'seat-link', 'Choose class →'));
     button.append(service, route, availability);
     button.addEventListener('click', async () => {
       await selectTrain(train.id);
@@ -186,9 +185,7 @@ function renderTrains() {
 }
 
 function renderSeats() {
-  const focusedSeat = document.activeElement?.dataset.seatNo;
   const focusedClass = document.activeElement?.dataset.classCode;
-  $('seat-grid').replaceChildren();
   const active = classes.find(c => c.code === selectedClass) || classes[0];
   document.querySelector('.coach-badge').textContent = active.name + ' · ' + active.coach;
   $('classes').replaceChildren(...classes.map(c => {
@@ -198,7 +195,6 @@ function renderSeats() {
     button.disabled = !seats.length || Boolean(state.hold);
     button.dataset.classCode = c.code;
     button.onclick = () => {
-      if (selectedClass !== c.code) selectedSeats.clear();
       selectedClass = c.code;
       remember();
       renderSeats();
@@ -206,36 +202,9 @@ function renderSeats() {
     return button;
   }));
   if (focusedClass) $('classes').querySelector('[data-class-code="' + focusedClass + '"]')?.focus({ preventScroll: true });
-  for (const seat of state.seats) {
-    if (seat.status !== 'free' && !state.busy) selectedSeats.delete(seat.seatNo);
-  }
-  const selection = formatSeats([...selectedSeats].sort((a, b) => a - b));
-  const summary = selectedSeats.size
-    ? selectedSeats.size + ' of ' + passengerCount() + ' selected · ' + selection + ' · ₹' + (selectedSeats.size * active.fare)
-    : 'Choose ' + passengerCount() + (passengerCount() === 1 ? ' seat' : ' seats');
-  if ($('selection-summary').textContent !== summary) $('selection-summary').textContent = summary;
-  $('reserve-seats').disabled = selectedSeats.size !== passengerCount() || state.busy || Boolean(state.hold);
-  for (const seat of state.seats.filter(s => seatClass(s.seatNo) === active)) {
-    const mine = state.hold?.trainId === state.trainId && seatsInHold(state.hold).includes(seat.seatNo) && seat.status === 'held';
-    const selected = selectedSeats.has(seat.seatNo);
-    const button = element('button', 'seat ' + seat.status + (mine ? ' mine' : '') + (selected ? ' selected' : ''), String(seat.seatNo).padStart(2, '0'));
-    button.type = 'button';
-    button.dataset.seatNo = String(seat.seatNo);
-    button.disabled = seat.status !== 'free' || state.busy || Boolean(state.hold);
-    button.setAttribute('aria-label', 'Seat ' + seat.seatNo + ', ' + (mine ? 'held by you' : seat.status));
-    button.title = mine ? 'Your seat hold' : seat.status === 'free' ? 'Hold seat ' + seat.seatNo : seat.status;
-    button.setAttribute('aria-pressed', String(selected));
-    button.onclick = () => {
-      if (selected) selectedSeats.delete(seat.seatNo);
-      else if (selectedSeats.size === passengerCount()) {
-        message('Your passenger count is ' + passengerCount() + '. Change it in the journey planner to select more seats.');
-        return;
-      } else selectedSeats.add(seat.seatNo);
-      renderSeats();
-    };
-    $('seat-grid').append(button);
-    if (button.dataset.seatNo === focusedSeat && !button.disabled) button.focus({ preventScroll: true });
-  }
+  const available = state.seats.filter(seat => seat.status === 'free' && seatClass(seat.seatNo) === active).length;
+  $('selection-summary').textContent = available + ' available in ' + active.name;
+  $('reserve-seats').disabled = available < passengerCount() || state.busy || Boolean(state.hold);
   document.querySelector('.seats-panel').setAttribute('aria-busy', String(state.busy));
   renderHold();
 }
@@ -271,7 +240,6 @@ async function selectTrain(id) {
     message('You have an active hold. Confirm it or wait for its five-minute expiry before changing trains.');
     return;
   }
-  if (state.trainId !== id) selectedSeats.clear();
   state.trainId = id;
   state.seats = [];
   state.busy = true;
@@ -301,39 +269,21 @@ async function refresh() {
   }
 }
 
-$('reserve-seats').onclick = () => holdSeat([...selectedSeats]);
+$('reserve-seats').onclick = openTravellers;
 
-async function holdSeat(seatNos) {
-  if (state.busy || state.hold) return;
+function openTravellers() {
   if (!passenger) {
-    resumeSeat = { trainId: state.trainId, seatNos };
+    resumeSeat = { trainId: state.trainId };
     openPassenger();
     return;
   }
-  state.busy = true;
-  renderSeats();
-  renderTrains();
-  try {
-    const hold = await api('/seats/hold', { trainId: state.trainId, seatNos, checkoutRequired: true });
-    saveHold(hold);
-    selectedSeats.clear();
-    $('traveller-fields').replaceChildren();
-    go('traveller');
-    message('Reserved seats ' + formatSeats(seatsInHold(hold)) + '. Complete checkout within five minutes.', true);
-    await loadSeats();
-  } catch (error) {
-    if (error.status === 401) {
-      passenger = null;
-      resumeSeat = { trainId: state.trainId, seatNos };
-      openPassenger();
-    }
-    message(error.message);
-  } finally {
-    state.busy = false;
-    renderTrains();
-    renderSeats();
-    try { await refresh(); } catch { /* Keep the original result visible. */ }
+  $('traveller-fields').replaceChildren();
+  for (let index = 0; index < passengerCount(); index++) {
+    const fieldset = $('traveller-fields-template').content.cloneNode(true);
+    fieldset.querySelector('legend').textContent = 'Passenger ' + (index + 1);
+    $('traveller-fields').append(fieldset);
   }
+  go('traveller');
 }
 
 function renderGroupTickets(tickets) {
@@ -449,7 +399,7 @@ setInterval(() => {
     saveHold(null);
     renderSeats();
     go('coach');
-    message('Your seat hold expired. Choose an available seat again.');
+    message('Your seat hold expired. Enter passenger details to request new berths.');
     refresh().catch(error => message(error.message));
   } else {
     renderHold();
@@ -463,7 +413,7 @@ setInterval(() => {
       if (state.hold?.checkoutId !== id || state.busy || state.hold.pending) return;
       if (order.paid) $('confirm').click();
       else if (Date.parse(order.expiresAt) <= Date.now()) {
-        saveHold(null); go('coach'); message('Your seat hold expired. Choose another available seat.');
+        saveHold(null); go('coach'); message('Your seat hold expired. Enter passenger details to request new berths.');
       }
     }).catch(() => {});
   }
@@ -504,7 +454,6 @@ $('journey-form').addEventListener('submit', async event => {
     }
     state.trains = data.trains;
     query = nextQuery;
-    selectedSeats.clear();
     state.trainId = null;
     state.seats = [];
     $('ticket').hidden = true;
@@ -558,10 +507,9 @@ function ticketCard(ticket) {
   if (cancelled || !ticket.train_id) return item;
 
   const actions = element('div', 'saved-ticket-actions');
-  const change = element('button', 'text-button', 'Change seat');
   const cancel = element('button', 'text-button', 'Cancel ticket');
-  change.type = cancel.type = 'button';
-  actions.append(change, cancel);
+  cancel.type = 'button';
+  actions.append(cancel);
   const note = element('p', 'subtle');
   note.setAttribute('role', 'status');
   details.append(actions, note);
@@ -572,8 +520,8 @@ function ticketCard(ticket) {
     try {
       await api('/bookings/' + encodeURIComponent(ticket.pnr) + '/' + action, payload);
       if ($('ticket-pnr').textContent === ticket.pnr) {
-        if (action === 'change-seat') $('ticket-seat').textContent = String(payload.seatNo).padStart(2,'0');
-        else { $('ticket').hidden = true; go('journey'); }
+        $('ticket').hidden = true;
+        go('journey');
       }
       await loadTickets(ticket.pnr);
       $('passenger-status').textContent = feedback;
@@ -585,36 +533,6 @@ function ticketCard(ticket) {
     }
   }
 
-  change.addEventListener('click', async () => {
-    change.disabled = true;
-    note.textContent = 'Looking for available seats…';
-    try {
-      const { seats } = await api('/trains/' + ticket.train_id + '/seats');
-      const free = seats.filter(seat => seat.status === 'free' && (!ticket.travel_class || seatClass(seat.seatNo).code === ticket.travel_class));
-      if (!free.length) {
-        note.textContent = 'There are no available seats on this service.';
-        return;
-      }
-      const form = element('form', 'seat-change-form');
-      const label = element('label', '', 'New seat');
-      const select = element('select');
-      select.append(...free.map(seat => new Option('Seat ' + seat.seatNo, seat.seatNo)));
-      label.append(select);
-      const save = element('button', 'primary-button', 'Save seat change');
-      form.append(label, save);
-      form.addEventListener('submit', event => {
-        event.preventDefault();
-        update('change-seat', { seatNo: Number(select.value), expectedSeat: ticket.seat_no }, 'Seat changed. Your PNR is the same.');
-      });
-      change.replaceWith(form);
-      select.focus();
-      note.textContent = '';
-    } catch (error) {
-      note.textContent = error.message;
-    } finally {
-      change.disabled = false;
-    }
-  });
   cancel.addEventListener('click', () => {
     if (window.confirm('Cancel demo ticket ' + ticket.pnr + ' and release seat ' + ticket.seat_no + '?')) {
       update('cancel', {}, 'Ticket cancelled. The seat is available again.');
@@ -686,7 +604,7 @@ $('passenger-form').addEventListener('submit', async event => {
     if (state.hold || target) {
       $('passenger-dialog').close();
       if (state.hold) await boot();
-      else if (target.trainId === state.trainId) await holdSeat(target.seatNos);
+      else if (target.trainId === state.trainId) openTravellers();
     } else {
       await loadTickets();
     }
@@ -739,7 +657,7 @@ function syncPage() {
   let page = location.hash.slice(1);
   if (state.hold && (steps.includes(page) || page === 'journey')) page = activeHoldPage();
   else if (page === 'receipt' && $('ticket').hidden) page = 'journey';
-  else if (['traveller','payment'].includes(page)) page = state.trainId ? 'coach' : 'journey';
+  else if ((page === 'payment' || page === 'traveller' && (!state.trainId || !passenger || !$('traveller-fields').children.length))) page = state.trainId ? 'coach' : 'journey';
   else if (page === 'coach' && !state.trainId || page === 'results' && !query) page = 'journey';
   if (page !== location.hash.slice(1)) history.replaceState({query,trainId:state.trainId,selectedClass},'', '#' + page);
   const step = steps.indexOf(page);
@@ -752,25 +670,25 @@ function syncPage() {
     else item.removeAttribute('aria-current');
   });
   for (const id of ['traveller','payment']) $(id).hidden = id !== page;
-  if (state.hold) {
-    const c = seatClass(state.hold.seatNo);
-    const seats = seatsInHold(state.hold);
-    const total = seats.length * c.fare;
-    const train = state.trains.find(t => t.id === state.hold.trainId);
+  if (state.hold || page === 'traveller') {
+    const c = state.hold ? seatClass(state.hold.seatNo) : classes.find(item => item.code === selectedClass) || classes[0];
+    const seats = state.hold ? seatsInHold(state.hold) : [];
+    const total = (seats.length || passengerCount()) * c.fare;
+    const train = state.trains.find(t => t.id === (state.hold?.trainId ?? state.trainId));
     const summary = {
       train: train?.name || 'Selected train',
       route: train ? train.source + ' → ' + train.destination : '',
       class: c.name,
-      seats: formatSeats(seats),
+      seats: (seats.length || passengerCount()) + ' · assigned automatically',
       total: rupees.format(total),
     };
     for (const panel of summaryPanels) {
       for (const field of panel.querySelectorAll('[data-summary]')) field.textContent = summary[field.dataset.summary];
     }
-    if (page === 'traveller' && !$('traveller-fields').children.length) {
-      for (const seat of seats) {
+    if (page === 'traveller' && state.hold && !$('traveller-fields').children.length) {
+      for (let index = 0; index < seats.length; index++) {
         const fieldset = $('traveller-fields-template').content.cloneNode(true);
-        fieldset.querySelector('legend').textContent = 'Passenger for seat ' + formatSeats([seat]);
+        fieldset.querySelector('legend').textContent = 'Passenger ' + (index + 1);
         $('traveller-fields').append(fieldset);
       }
     }
@@ -797,7 +715,7 @@ $('release-hold').onclick = async () => {
     await api('/seats/release', state.hold);
     saveHold(null);
     $('traveller-fields').replaceChildren();
-    message('Seat released. You can change your journey or choose another seat.', true);
+    message('Berth hold released. You can change your journey or class.', true);
     go('coach');
     await loadSeats();
   } catch (error) { message(error.message); }
@@ -805,7 +723,7 @@ $('release-hold').onclick = async () => {
 };
 $('traveller-form').onsubmit = async e => {
   e.preventDefault();
-  if (!state.hold || state.busy) return;
+  if (!state.trainId || state.busy) return;
   const form = e.currentTarget;
   const travellers = [...form.querySelectorAll('fieldset')].map(fieldset => {
     const values = Object.fromEntries([...fieldset.querySelectorAll('input, select')].map(input => [input.name, input.value]));
@@ -814,7 +732,18 @@ $('traveller-form').onsubmit = async e => {
   state.busy = true;
   $('continue-payment').disabled = true;
   try {
-    const order = await api('/checkout',{travellers,holdToken:state.hold.holdToken});
+    if (!state.hold) {
+      const hold = await api('/seats/allocate', {
+        trainId: state.trainId,
+        classCode: selectedClass || classes[0].code,
+        preferences: travellers.map(person => person.preference),
+      });
+      saveHold(hold);
+    }
+    const orderedTravellers = travellers.map((person, index) => ({ person, seat: seatsInHold(state.hold)[index] }))
+      .sort((a, b) => a.seat - b.seat)
+      .map(entry => entry.person);
+    const order = await api('/checkout',{travellers:orderedTravellers,holdToken:state.hold.holdToken});
     saveHold({...state.hold,checkoutId:order.id});
     form.reset();
     go('payment');

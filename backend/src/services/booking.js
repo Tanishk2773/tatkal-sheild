@@ -84,19 +84,45 @@ export function createBookingService(pool, { holdSeconds = 300, now = () => Date
     return rows.length > 0;
   }
 
-  async function holdSeat({ trainId, seatNo, seatNos = [seatNo], userId, checkoutRequired = false }) {
-    if (!Array.isArray(seatNos) || seatNos.length < 1 || seatNos.length > 6 ||
+  async function holdSeat({ trainId, seatNo, seatNos = [seatNo], userId, checkoutRequired = false, classCode, preferences }) {
+    const automatic = preferences !== undefined;
+    if (automatic && (!Array.isArray(preferences) || preferences.length < 1 || preferences.length > 6 ||
+        preferences.some(value => !['No preference', 'Lower', 'Middle', 'Upper', 'Side lower', 'Side upper'].includes(value)))) {
+      throw new BookingError(400, 'Enter valid berth preferences for one to six passengers.');
+    }
+    if (!automatic && (!Array.isArray(seatNos) || seatNos.length < 1 || seatNos.length > 6 ||
         seatNos.some(seat => !Number.isSafeInteger(seat) || seat < 1) ||
-        new Set(seatNos).size !== seatNos.length) {
+        new Set(seatNos).size !== seatNos.length)) {
       throw new BookingError(400, 'Choose one to six different seats.');
     }
-    const selected = [...seatNos].sort((a, b) => a - b);
+    const selected = automatic ? [] : [...seatNos].sort((a, b) => a - b);
     if (selected.some(seat => seatClass(seat) !== seatClass(selected[0]))) {
       throw new BookingError(400, 'Choose seats in the same class.');
     }
 
     return transaction(async client => {
       const train = await getTrain(client, trainId, true);
+      if (automatic) {
+        const { rows: sold } = await client.query(
+          "SELECT seat_no FROM bookings WHERE train_id=$1 AND status='CONFIRMED'", [trainId]
+        );
+        const { rows: holds } = await client.query('SELECT seat_no, expires_at FROM seat_holds WHERE train_id=$1', [trainId]);
+        const occupied = new Set([...sold, ...holds.filter(hold => new Date(hold.expires_at).getTime() > now())].map(row => row.seat_no));
+        const free = Array.from({ length: train.total_seats }, (_, i) => i + 1)
+          .filter(seat => seatClass(seat).code === classCode && !occupied.has(seat));
+        if (free.length < preferences.length) throw new BookingError(409, 'There are too few available berths in this class.');
+        const layout = ['2A', '1A'].includes(classCode)
+          ? (classCode === '1A' ? ['Lower', 'Upper'] : ['Lower', 'Upper', 'Lower', 'Upper', 'Side lower', 'Side upper'])
+          : ['Lower', 'Middle', 'Upper', 'Lower', 'Middle', 'Upper', 'Side lower', 'Side upper'];
+        const first = Array.from({ length: train.total_seats }, (_, i) => i + 1).find(seat => seatClass(seat).code === classCode);
+        preferences.forEach((preference, index) => {
+          const match = free.findIndex(seat => layout[(seat - first) % layout.length] === preference);
+          if (match >= 0) selected[index] = free.splice(match, 1)[0];
+        });
+        preferences.forEach((_, index) => {
+          if (!selected[index]) selected[index] = free.shift();
+        });
+      }
       const active = [];
       for (const seat of selected) {
         checkSeat(train, seat);

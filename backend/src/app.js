@@ -56,6 +56,13 @@ export function createApp(database, options = {}) {
     if (!/^[1-9]\d*$/.test(req.params.id)) throw new BookingError(400, 'Invalid train ID.');
     res.json(await service.listSeats(positiveInteger(Number(req.params.id), 'trainId')));
   });
+  app.post('/api/seats/allocate', requirePassenger, async (req, res) => {
+    const { trainId, classCode, preferences } = req.body ?? {};
+    res.status(201).json(await service.holdSeat({
+      trainId: positiveInteger(trainId, 'trainId'),
+      classCode, preferences: preferences ?? [], userId: req.passenger.id, checkoutRequired: true
+    }));
+  });
   app.post('/api/seats/hold', requirePassenger, async (req, res) => {
     const request = req.body?.seatNos === undefined
       ? seatRequest(req.body, req.passenger.id)

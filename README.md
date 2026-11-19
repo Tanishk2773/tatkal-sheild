@@ -45,7 +45,7 @@ Press **Ctrl+C** in the terminal to stop the server. Run `npm start` from the sa
 ## Try the jury demonstration
 
 1. In the Operations Lab, enable **Drop the next confirmation reply**.
-2. Search **CSMT → MAO** on the suggested demo date, choose a train and select an available seat.
+2. Search **CSMT → MAO** on the suggested demo date, choose a train and class.
 3. Create a passenger account or sign in. Choose a class, enter fictional passenger details and pay with the demo wallet while the five-minute hold is active.
 4. Refresh the same browser tab and choose **Retrieve paid ticket**. Open **My tickets** to see the PNR.
 
@@ -65,7 +65,7 @@ Station names and codes are reference data. Schedules, inventories and tickets a
 
 ## Classes and QR checkout
 
-Each search opens a results view. The nine demo services cover Mumbai–Pune, Mumbai–Madgaon, Delhi–Lucknow and Bengaluru–Mysuru. Choose a train, compare the four class fares, and select up to six free seats in one class. The passenger account owns the ticket. The traveller form records details for each reserved seat. One QR payment covers the group. Each passenger receives a separate PNR so their seat can be changed or cancelled independently. Retrying a confirmation returns the original set of PNRs.
+Each search opens a results view. The nine demo services cover Mumbai–Pune, Mumbai–Madgaon, Delhi–Lucknow and Bengaluru–Mysuru. Choose a train, compare the four class fares, and enter details and berth preferences for up to six passengers in one class. The passenger account owns the ticket. The server assigns available berths automatically and tries to honor each preference. One QR payment covers the group. Each passenger receives a separate PNR and an assigned seat number, and each ticket can be cancelled independently. Retrying a confirmation returns the original set of PNRs.
 
 The QR opens a browser-based demo wallet. On one computer, use **Pay with demo wallet** directly. For a phone demonstration, bind the server to a reachable interface and set `PUBLIC_ORIGIN` to the reachable site origin before starting. A phone cannot reach a computer through its loopback address.
 
