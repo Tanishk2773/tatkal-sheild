@@ -56,7 +56,7 @@ Press **Ctrl+C** in the terminal to stop the server. Run `npm start` from the sa
 | Coach and booking service | Inspect free, held and sold seats. Holds expire after five minutes. Transactions, ownership checks and a unique seat constraint protect confirmations. |
 | Recovery drill | Drop a successful response in the browser, reload and retry. A matching confirmation returns the existing PNR. |
 | Operations Lab | Inspect the health-probe response time, free seats and active holds. Follow an interactive explanation of the failure. |
-| Interface | Replay a train arrival, rotate the 3D train and explore a layered animated landscape. Reduced-motion support is included. |
+| Interface | Explore the animated railway map backdrop and booking interface with reduced-motion support. |
 | Jury materials | The companion presentation is served at `/jury/`. Both narrated MP4 films are bundled with the app. |
 
 Station names and codes are reference data. Schedules, inventories and tickets are simulated. The project has no live RailOne booking integration.

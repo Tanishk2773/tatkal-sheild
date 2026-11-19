@@ -6,11 +6,11 @@
   <meta name="theme-color" content="#18332e">
   <meta name="description" content="Tatkal Shield — a mock train booking reliability project.">
   <title>Tatkal Shield · Book a journey</title>
-  <link rel="stylesheet" href="/css/styles.css?v=9">
+  <link rel="stylesheet" href="/css/styles.css?v=10">
   <script src="/js/app.js?v=9" type="module"></script>
   <script type="module" src="/js/arrival.js"></script>
   <script type="module" src="/js/motion.js?motion=2"></script>
-  <script type="module" src="/js/train-model.js"></script>
+  
 </head>
 <body>
   <header class="topbar">
@@ -98,28 +98,6 @@
         <li><h3>Hold your seat</h3><p>Pick an available seat from the coach map. The five-minute timer shows how long that seat is reserved for you.</p></li>
         <li><h3>Collect your ticket</h3><p>Confirm your hold and collect a demo PNR. If the reply disappears, your browser can retrieve the confirmation.</p></li>
       </ol>
-    </section>
-
-    <section class="model-section editorial reveal" aria-labelledby="model-title">
-      <header class="editorial-heading">
-        <p class="eyebrow">ON THE PLATFORM</p>
-        <h2 id="model-title">Watch the express arrive.</h2>
-      </header>
-      <div class="model-stage" role="img" aria-label="Three-dimensional model of an electric locomotive and two coaches on parallel rails.">
-        <div class="model-scenery" aria-hidden="true">
-          <span class="model-sun"></span><span class="model-cloud"></span><span class="model-cloud second-cloud"></span>
-          <span class="model-mountains"></span><span class="model-hills"></span>
-          <span class="model-trees"></span><span class="model-signal"></span>
-        </div>
-        <div class="model-world" aria-hidden="true">
-          <div class="model-track"></div>
-          <div class="model-consist"><div class="rail-car engine"><i class="rail-face near"></i><i class="rail-face far"></i><i class="rail-face roof"></i><i class="rail-face floor"></i><i class="rail-face nose"></i><i class="rail-face tail"></i></div><div class="rail-car coach-car first-car"><i class="rail-face near"></i><i class="rail-face far"></i><i class="rail-face roof"></i><i class="rail-face floor"></i><i class="rail-face nose"></i><i class="rail-face tail"></i></div><div class="rail-car coach-car second-car"><i class="rail-face near"></i><i class="rail-face far"></i><i class="rail-face roof"></i><i class="rail-face floor"></i><i class="rail-face nose"></i><i class="rail-face tail"></i></div></div>
-        </div>
-      </div>
-      <div class="model-controls">
-        <label for="model-angle">Viewing angle <input id="model-angle" type="range" min="-60" max="60" value="-24"></label>
-        <button class="primary-button" id="model-replay" type="button">↻ Replay 3D arrival</button>
-      </div>
     </section>
 
     <section id="operations" class="editorial reveal" aria-labelledby="operations-title">
