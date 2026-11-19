@@ -105,3 +105,26 @@ jobs:
           echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           docker push "$image"
           printf 'Published container image `%s`\n' "$image" >> "$GITHUB_STEP_SUMMARY"
+  deploy:
+    needs: deliver
+    if: github.ref == 'refs/heads/main' && vars.EXPO_DEPLOY_ENABLED == 'true'
+    runs-on: [self-hosted, linux, tatkal-expo]
+    timeout-minutes: 10
+    concurrency:
+      group: tatkal-expo-deploy
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v6
+      - name: Pull the tested release and deploy it to the expo host
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          export DOCKER_CONFIG=$(mktemp -d)
+          trap 'rm -rf "$DOCKER_CONFIG"' EXIT
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          export BOOKING_DEPLOY_DIR="$GITHUB_WORKSPACE"
+          bash deploy/promote.sh "ghcr.io/${GITHUB_REPOSITORY,,}:$GITHUB_SHA"

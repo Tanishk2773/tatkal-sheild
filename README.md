@@ -126,6 +126,8 @@ The original RailKit and YouPI ZIPs are preserved locally in `integrations/upstr
 - **YouPI sandbox** opens a merchant checkout from the payment screen when all four `YOUPI_SANDBOX_*` variables in [.env.example](.env.example) are set. Configure a YouPI test deployment and use test credentials. The server uses the order’s fare and an idempotency key. Tatkal Shield tickets are issued by the local demo wallet.
 ## Run the primary website in Docker
 
+On this Windows expo laptop, double-click `Start-Expo.cmd` in the project directory and keep its window open. The launcher holds WSL open while displaying container logs. Open `http://127.0.0.1:3011/` in Chrome. Closing the terminal may allow WSL to stop, which also stops the containers.
+
 ```sh
 docker compose up -d --build --wait
 docker compose ps
@@ -148,3 +150,13 @@ Open [the booking website](http://localhost:3011/) or [the jury showcase](http:/
 GitHub Actions runs API and browser tests, checks allocation races on PostgreSQL, builds the commit SHA image with Buildx, scans it with Trivy, and runs checkout and outbox checks on disposable Compose staging. Successful pushes to `main` publish the exact tested image to GHCR.
 
 The optional Jenkins pipeline accepts a published commit SHA image, tests it with its own disposable PostgreSQL volume, and pauses for approval before promotion. The Jenkins agent needs Docker Compose, Node.js, Chromium system dependencies, curl, jq and registry access. Configure `BOOKING_DEPLOY_DIR` as the existing demo Compose directory on that Docker host. Promotion checks the running SHA via `/api/health` and restores the previous image if the check fails. A single app replica may experience a brief interruption during replacement.
+
+### College expo demonstration
+
+1. Push a change to `main` and open the GitHub Actions run. Show verification, Docker build, image scanning, Compose staging deployment and browser checkout checks.
+2. Show the successful `deliver` job and its GHCR image tag, which is the commit SHA.
+3. Run `docker compose images` to show the packaged images, then `docker compose ps` to show running containers and health.
+4. Book for multiple passengers through the browser, use the demo QR wallet, and show the assigned berths and PNRs.
+5. Enable the lost-confirmation drill before payment, then retrieve the original PNRs. Explain how the tests exercise the same recovery.
+
+For automatic deployment after GHCR publication, register a Linux GitHub Actions runner on the intended Docker host with label `tatkal-expo` and set the repository variable `EXPO_DEPLOY_ENABLED=true`. That host needs Docker Compose, bash, curl and jq. The workflow then runs the `deploy` job after `deliver`, checks the deployed SHA and rolls back on health failure. Until that runner and variable are configured, the workflow deploys to disposable CI staging and publishes the image. Its default site address is local to the deployment host. Public hosting also requires a reachable server, HTTPS and a domain.
