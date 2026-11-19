@@ -30,8 +30,8 @@ On Windows, if PowerShell blocks `npm.ps1`, use `npm.cmd ci` and `npm.cmd start`
 
 **3. Open the app.** Keep the terminal running and use these links on the same computer:
 
-- [Booking app](http://127.0.0.1:3000/) — choose **Mumbai CSMT → Pune Junction** under **Try a demo route**, pick the train, and select a seat. You can create a passenger account when prompted.
-- [Jury presentation](http://127.0.0.1:3000/jury/) — open the walkthrough or play the narrated DevOps film.
+- [Booking app](http://127.0.0.1:3000/) — click **Book a ticket**, choose your passenger count, and pick **Mumbai CSMT → Pune Junction** under **Try a demo route**. Select one seat per passenger. You can create a passenger account when prompted.
+- [Jury presentation](http://127.0.0.1:3000/jury/) — use the separate presentation site to walk through the problem statement, backend contention and recovery scenarios, and the GitHub Actions pipeline. The narrated DevOps film remains available.
 - [Health check](http://127.0.0.1:3000/api/health) — the default demo returns `"status":"ok"` and `"storage":"demo-memory"`.
 
 Press **Ctrl+C** in the terminal to stop the server. Run `npm start` from the same folder to start it again. Restarting clears demo accounts and tickets. For persistent storage, copy [.env.example](.env.example) to `.env`, set `DATABASE_URL` to an existing PostgreSQL database, and restart.

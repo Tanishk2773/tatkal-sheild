@@ -15,12 +15,6 @@ h1, h2, .journey h2, .editorial-heading h2 {
   letter-spacing: -.035em;
   line-height: 1.12;
 }
-.booking-home.intro { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, .9fr); align-items: center; gap: 32px; padding: 0 0 20px; }
-.booking-home.intro::before { content: none; }
-.booking-home h1 { font-size: clamp(34px, 4vw, 55px); margin: 0 0 22px; }
-.booking-home .poster { border-radius: 16px; background: #102942; transform: none; }
-.booking-home figcaption { letter-spacing: 0; }
-.booking-home figcaption button { color: #fada96; }
 .journey, .panel, .account-dialog { background: #fff; border: 1px solid var(--border); }
 .journey { margin: 0; padding: clamp(16px, 2vw, 28px); box-shadow: 0 16px 34px -25px #17355570; }
 .journey h2 { font-size: 23px; }
@@ -44,10 +38,6 @@ h1, h2, .journey h2, .editorial-heading h2 {
 .rail-results dt { font-weight: 600; }
 .rail-results dd { margin: 0; }
 .rail-results details { padding: .75rem; border: 1px solid var(--border); border-radius: 6px; }
-@media (max-width: 840px) {
-  .booking-home.intro { grid-template-columns: 1fr; gap: 24px; }
-  .booking-home .poster { max-width: 580px; }
-}
 @media (max-width: 520px) {
   #journey-form { grid-template-columns: minmax(0, 1fr) 34px minmax(0, 1fr); }
   .topbar { flex-wrap: wrap; }
@@ -58,7 +48,6 @@ h1, h2, .journey h2, .editorial-heading h2 {
 .rail-title { font-size: clamp(30px, 4vw, 46px); }
 #lookup { grid-template-columns: 1fr; }
 #lookup-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr)); gap: 12px; }
-.booking-home figcaption { background: #102942; font: 13px/1.4 "Segoe UI", system-ui, sans-serif; }
 
 .topbar nav a, .account-trigger { font-size: 1rem; font-weight: 650; }
 .topbar nav a { padding: .55rem 0; }
@@ -74,4 +63,36 @@ h1, h2, .journey h2, .editorial-heading h2 {
 @media (max-width: 520px) {
   .topbar nav { justify-content: space-between; }
   .topbar nav a { font-size: .95rem; }
+}
+
+#welcome { display: none; }
+body[data-page="welcome"] #welcome {
+  display: grid;
+  grid-template-columns: minmax(0, .85fr) minmax(0, 1.35fr);
+  align-items: center;
+  gap: clamp(24px, 5vw, 78px);
+  min-height: min(66vh, 660px);
+}
+.welcome-copy h1 { font-size: clamp(4.25rem, 9vw, 9rem); line-height: .86; margin: 0 0 24px; letter-spacing: -.075em; }
+.welcome-copy h1 span { color: #184e81; }
+.welcome-copy p { max-width: 34ch; font-size: 1.1rem; }
+.welcome-copy .primary-button { margin-top: 10px; padding: .85rem 1.15rem; font-size: 1.05rem; }
+.welcome-jury { display: block; width: fit-content; margin-top: 1rem; color: #184e81; }
+#welcome .poster { border-radius: 14px; background: #102942; transform: none; }
+#welcome figcaption { background: #102942; }
+#journey { max-width: 1020px; margin-inline: auto; }
+#journey-form { grid-template-columns: minmax(0, 1fr) 40px minmax(0, 1fr); }
+#journey-form label:nth-of-type(3) { grid-column: 1; }
+#journey-form label:nth-of-type(4) { grid-column: 2 / 4; }
+#journey-form .search-action { grid-column: 1 / -1; }
+@media (min-width: 980px) {
+  #journey-form { grid-template-columns: 1fr 40px 1fr minmax(135px, .75fr) minmax(115px, .6fr); }
+  #journey-form label:nth-of-type(3), #journey-form label:nth-of-type(4) { grid-column: auto; }
+  #journey-form .search-action { grid-column: 4 / 6; }
+}
+@media (max-width: 760px) {
+  body[data-page="welcome"] #welcome { grid-template-columns: 1fr; min-height: auto; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .welcome-copy { animation: station-reveal .65s ease-out both; }
 }

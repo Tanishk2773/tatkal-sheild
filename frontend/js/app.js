@@ -12,6 +12,7 @@ let passenger = null;
 let registerMode = false;
 let resumeSeat = null;
 const selectedSeats = new Set();
+const passengerCount = () => query?.passengers || 1;
 const seatsInHold = hold => hold.seatNos || [hold.seatNo];
 const formatSeats = values => values.map(seat => String(seat).padStart(2, '0')).join(', ');
 try { $('drop-response').checked = sessionStorage.getItem('tatkal-drill') === 'on'; } catch {}
@@ -145,7 +146,7 @@ function renderTrains() {
   $('held-total').textContent = state.trains.reduce((sum, train) => sum + train.held, 0);
   const matches = query ? state.trains.filter(train => train.source === query.source &&
     train.destination === query.destination && localDay.format(new Date(train.departure)) === query.day) : [];
-  $('train-count').textContent = matches.length === 1 ? '1 service' : matches.length + ' services';
+  $('train-count').textContent = matches.length + (matches.length === 1 ? ' service' : ' services') + ' · ' + passengerCount() + (passengerCount() === 1 ? ' passenger' : ' passengers');
   $('train-list').replaceChildren();
   if (query && !matches.length) {
     $('train-list').append(element('p', 'empty-result', 'No demo trains match this journey and date. Try a demo route above.'));
@@ -166,7 +167,7 @@ function renderTrains() {
     const fill = element('span');
     fill.style.width = (train.available / train.total_seats * 100) + '%';
     track.append(fill);
-    button.append(availability, track, element('span', 'seat-link', state.trainId === train.id ? 'View classes and seats' : 'Choose seats →'));
+    button.append(availability, track, element('span', 'seat-link', 'Choose seats →'));
     button.addEventListener('click', async () => {
       await selectTrain(train.id);
       if (state.trainId === train.id) go(state.hold ? activeHoldPage() : 'coach');
@@ -192,10 +193,10 @@ function renderSeats() {
   }
   const selection = formatSeats([...selectedSeats].sort((a, b) => a - b));
   const summary = selectedSeats.size
-    ? selectedSeats.size + ' selected · ' + selection + ' · ₹' + (selectedSeats.size * active.fare)
-    : 'No seats selected';
+    ? selectedSeats.size + ' of ' + passengerCount() + ' selected · ' + selection + ' · ₹' + (selectedSeats.size * active.fare)
+    : 'Choose ' + passengerCount() + (passengerCount() === 1 ? ' seat' : ' seats');
   if ($('selection-summary').textContent !== summary) $('selection-summary').textContent = summary;
-  $('reserve-seats').disabled = !selectedSeats.size || state.busy || Boolean(state.hold);
+  $('reserve-seats').disabled = selectedSeats.size !== passengerCount() || state.busy || Boolean(state.hold);
   for (const seat of state.seats.filter(s => seatClass(s.seatNo) === active)) {
     const mine = state.hold?.trainId === state.trainId && seatsInHold(state.hold).includes(seat.seatNo) && seat.status === 'held';
     const selected = selectedSeats.has(seat.seatNo);
@@ -207,8 +208,8 @@ function renderSeats() {
     button.setAttribute('aria-pressed', String(selected));
     button.onclick = () => {
       if (selected) selectedSeats.delete(seat.seatNo);
-      else if (selectedSeats.size === 6) {
-        message('You can reserve up to six seats in one booking.');
+      else if (selectedSeats.size === passengerCount()) {
+        message('Your passenger count is ' + passengerCount() + '. Change it in the journey planner to select more seats.');
         return;
       } else selectedSeats.add(seat.seatNo);
       renderSeats();
@@ -396,11 +397,14 @@ async function boot() {
     : 'No scheduled departures.';
   const restored = state.hold && state.trains.find(train => train.id === state.hold.trainId);
   if (restored) {
-    query = { source: restored.source, destination: restored.destination, day: localDay.format(new Date(restored.departure)) };
+    query = { source: restored.source, destination: restored.destination, day: localDay.format(new Date(restored.departure)), passengers: seatsInHold(state.hold).length };
+  }
+  if (query) {
     fillStation($('origin'), query.source);
     fillStation($('destination'), query.destination);
     $('travel-date').value = query.day;
   }
+  $('passenger-count').value = String(passengerCount());
   $('retry-timetable').hidden = true;
   renderTrains();
   if (state.trainId) await selectTrain(state.trainId);
@@ -466,7 +470,7 @@ $('journey-form').addEventListener('submit', async event => {
   }
   fillStation($('origin'), origin[1]);
   fillStation($('destination'), destination[1]);
-  const nextQuery = { source: origin[1], destination: destination[1], day: $('travel-date').value };
+  const nextQuery = { source: origin[1], destination: destination[1], day: $('travel-date').value, passengers: Number($('passenger-count').value) };
   state.busy = true;
   const searchButton = $('find-trains');
   searchButton.setAttribute('aria-busy', 'true');
@@ -712,13 +716,13 @@ function go(page) {
 }
 function syncPage() {
   let page = location.hash.slice(1);
-  if (state.hold && (!page || steps.includes(page) || page === 'journey')) page = activeHoldPage();
+  if (state.hold && (steps.includes(page) || page === 'journey')) page = activeHoldPage();
   else if (page === 'receipt' && $('ticket').hidden) page = 'journey';
   else if (['traveller','payment'].includes(page)) page = state.trainId ? 'coach' : 'journey';
   else if (page === 'coach' && !state.trainId || page === 'results' && !query) page = 'journey';
   if (page !== location.hash.slice(1)) history.replaceState({query,trainId:state.trainId,selectedClass},'', '#' + page);
   const step = steps.indexOf(page);
-  document.body.dataset.page = step < 0 ? 'home' : page;
+  document.body.dataset.page = step < 0 ? (page && page !== 'welcome' ? 'home' : 'welcome') : page;
   $('flow-nav').hidden = step < 0;
   $('flow-clock').hidden = !state.hold;
   $('release-hold').hidden = !state.hold || state.hold.pending;
@@ -746,9 +750,13 @@ function syncPage() {
     const heading = document.querySelector(({results:'#trains-heading',coach:'#seats-heading',traveller:'#traveller h2',payment:'#payment h2',receipt:'#ticket'})[page]);
     heading?.focus({preventScroll:true});
     window.scrollTo(0,0);
+  } else if (page === 'journey') {
+    $('search-title').focus({preventScroll:true});
+    window.scrollTo(0, 0);
   } else if (page) document.getElementById(page)?.scrollIntoView();
 }
 window.addEventListener('hashchange', syncPage);
+if (location.hash === '#journey') syncPage();
 $('release-hold').onclick = async () => {
   if (state.busy || !state.hold) return;
   state.busy = true;

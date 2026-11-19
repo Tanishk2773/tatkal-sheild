@@ -114,6 +114,7 @@ function arrive() {
 }
 resize();
 window.addEventListener('resize',resize);
+new ResizeObserver(resize).observe(canvas);
 reducedMotion.addEventListener('change',arrive);
 document.querySelector('#replay').addEventListener('click',arrive);
 arrive();

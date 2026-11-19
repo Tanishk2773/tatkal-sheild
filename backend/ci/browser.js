@@ -29,9 +29,13 @@ try {
       page.waitForSelector('body[data-page="' + s + '"]', { timeout: 7000 });
     await page.goto(origin);
     if (width === 390) {
+      await page.locator('footer a[href="#operations"]').click();
       await page.locator('#drill summary').click();
       await page.locator('#drop-response').check();
     }
+    if (width === 390) await page.getByRole('link', { name: 'Book a train' }).click();
+    else await page.locator('#book-ticket').click();
+    await page.locator('#passenger-count').selectOption('2');
     await page.locator('#demo-routes button').first().click();
     await step('results');
     await page.locator('.train-card').first().click();
@@ -39,7 +43,7 @@ try {
     await page.locator('.class-choice').nth(1).click();
     await page.locator('.seat.free').first().click();
     await page.locator('.seat.free:not(.selected)').first().click();
-    assert.match(await page.locator('#selection-summary').innerText(), /2 selected/);
+    assert.match(await page.locator('#selection-summary').innerText(), /2 of 2 selected/);
     await page.locator('#reserve-seats').click();
     await page.locator('#passenger-switch').click();
     await page.locator('#passenger-name').fill('Test Rider');
@@ -122,9 +126,19 @@ try {
       .locator('.saved-ticket-status')
       .filter({ hasText: 'Cancelled' })
       .waitFor();
+    await page.goto(origin + '/jury/');
+    await page.getByRole('heading', { name: 'What happens when the booking reply disappears?' }).waitFor();
+    await page.locator('#recovery').click();
+    const backendTrace = page.locator('#booking-trace');
+    await backendTrace.getByRole('button', { name: 'Recover' }).click();
+    await backendTrace.getByRole('heading', { name: 'Refresh and retrieve the same PNRs' }).waitFor();
+    await page.locator('#delivery-trace').getByRole('button', { name: 'Staging' }).click();
+    await page.getByRole('heading', { name: 'Repeat checkout against the container' }).waitFor();
+    await page.getByText('Ready ·', { exact: false }).waitFor();
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'jury overflow ' + width);
     assert.deepEqual(errors, []);
     console.log(
-      width + 'px checkout, reload, ticket modification, cancellation passed',
+      width + 'px checkout, reload, ticket changes, cancellation and jury walkthrough passed',
     );
     await ctx.close();
   }

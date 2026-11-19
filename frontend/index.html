@@ -9,11 +9,11 @@
   <link rel="stylesheet" href="/css/styles.css?v=10">
   <link rel="stylesheet" href="/css/checkout.css">
   <link rel="stylesheet" href="/css/passenger.css">
-  <script src="/js/app.js?v=13" type="module"></script>
+  <script src="/js/app.js?v=14" type="module"></script>
   <script type="module" src="/js/arrival.js"></script>
 
 </head>
-<body>
+<body data-page="welcome">
   <header class="topbar">
     <a class="brand" href="/" aria-label="Tatkal Shield home"><span class="brand-mark" aria-hidden="true">TS</span><span>TATKAL<span class="brand-light"> SHIELD</span></span></a>
     <nav><a href="#journey">Book a train</a><a href="/rail-info.html">Rail information</a><a href="#guide">Help</a></nav>
@@ -38,16 +38,29 @@
     <p id="passenger-status" role="status"></p>
   </dialog>
   <main>
-    <div class="booking-home intro">
-      <div class="planner-column">
-        <h1>Plan your rail journey</h1>
+    <section id="welcome" aria-labelledby="welcome-title">
+      <div class="welcome-copy">
+        <h1 id="welcome-title">Tatkal<br>Shield<span>.</span></h1>
+        <p>Plan a train journey and book seats for your family in one checkout.</p>
+        <a id="book-ticket" class="primary-button" href="#journey">Book a ticket <span aria-hidden="true">→</span></a>
+        <a class="welcome-jury" href="/jury/">Explore the DevOps project ↗</a>
+      </div>
+      <figure class="poster"><canvas id="landscape" width="760" height="390" role="img" aria-label="An electric express crossing the Western Ghats at sunset"></canvas>
+        <figcaption><span>Across the Western Ghats</span><button id="replay" type="button">↻ Replay train</button></figcaption>
+      </figure>
+    </section>
     <section id="journey" class="journey" aria-labelledby="search-title">
-      <header><div><h2 id="search-title">Find a train</h2></div><span class="fare-type">Tatkal demo</span></header>
+      <header><div><h2 id="search-title" tabindex="-1">Find a train</h2></div><span class="fare-type">Tatkal demo</span></header>
       <form id="journey-form">
         <label><span>From</span><input id="origin" list="rail-stations" autocomplete="off" placeholder="Station name or code" required></label>
         <button id="swap-stations" type="button" aria-label="Swap departure and arrival stations" title="Swap stations">⇄</button>
         <label><span>To</span><input id="destination" list="rail-stations" autocomplete="off" placeholder="Station name or code" required></label>
         <label><span>Journey date · IST</span><input id="travel-date" type="date" required></label>
+        <label><span>Passengers</span><select id="passenger-count">
+          <option value="1">1 passenger</option><option value="2">2 passengers</option>
+          <option value="3">3 passengers</option><option value="4">4 passengers</option>
+          <option value="5">5 passengers</option><option value="6">6 passengers</option>
+        </select></label>
         <button class="search-action" id="find-trains" type="submit">Search trains <span aria-hidden="true">→</span></button>
       </form>
       <datalist id="rail-stations"></datalist>
@@ -56,12 +69,6 @@
       <p class="search-hint" id="schedule-hint">Loading the demo timetable…</p>
       <button id="retry-timetable" class="text-button" type="button" hidden>Retry timetable</button>
     </section>
-
-      </div>
-      <figure class="poster"><canvas id="landscape" width="760" height="390" role="img" aria-label="An electric express arrives on a viaduct in the Western Ghats at sunset."></canvas>
-        <figcaption><span>Across the Western Ghats</span><button id="replay" type="button">↻ Replay train</button></figcaption>
-      </figure>
-    </div>
     <div class="request-rail" role="presentation"><i></i></div>
     <nav class="flow-nav" id="flow-nav" hidden aria-label="Booking progress"><a href="#journey">Journey planner</a><span id="flow-progress"></span><span id="flow-clock"></span><button class="text-button" type="button" id="release-hold" hidden>Release seat and start again</button></nav>
     <div id="message" class="message" role="status" aria-live="polite" hidden></div>
@@ -85,7 +92,7 @@
           <div><span id="hold-caption" class="eyebrow">RESERVED FOR YOU</span><p>Seat <strong id="held-seat"></strong> <span id="expiry"> &middot; <span id="hold-timer" class="timer"></span> left</span></p></div>
           <button id="confirm" class="primary-button" type="button">Confirm mock booking <span aria-hidden="true">→</span></button>
         </div>
-        <p class="seat-help">Choose up to six available seats in one class. Your selection is held for five minutes after you continue.</p>
+        <p class="seat-help">Choose one seat per passenger in the same class. The five-minute hold starts when you reserve the seats.</p>
         <div class="seat-selection"><p id="selection-summary" role="status"></p><button id="reserve-seats" class="primary-button" type="button" disabled>Reserve selected seats →</button></div>
       </section>
     </div>
