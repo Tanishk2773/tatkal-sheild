@@ -28,6 +28,8 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm test
+      - run: npx playwright-core install --with-deps chromium
+      - run: npm run test:browser
       - name: Check concurrent booking and retry on PostgreSQL
         run: node backend/ci/postgres.js
       - name: Build the release candidate

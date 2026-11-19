@@ -7,7 +7,8 @@
   <meta name="description" content="Tatkal Shield — a mock train booking reliability project.">
   <title>Tatkal Shield · Book a journey</title>
   <link rel="stylesheet" href="/css/styles.css?v=10">
-  <script src="/js/app.js?v=9" type="module"></script>
+  <link rel="stylesheet" href="/css/checkout.css">
+  <script src="/js/app.js?v=11" type="module"></script>
   <script type="module" src="/js/arrival.js"></script>
   <script type="module" src="/js/motion.js?motion=2"></script>
 
@@ -47,7 +48,7 @@
       <figcaption><span>WESTERN GHATS <b>/</b> DECCAN LINE</span><button id="replay" type="button">&#8635; Replay arrival</button></figcaption></figure>
     </section>
     <section id="journey" class="journey reveal" aria-labelledby="search-title">
-      <header><div><p class="eyebrow">JOURNEY PLANNER</p><h2 id="search-title">Where are you headed?</h2></div><span class="fare-type">Tatkal · Sleeper</span></header>
+      <header><div><p class="eyebrow">JOURNEY PLANNER</p><h2 id="search-title">Where are you headed?</h2></div><span class="fare-type">Tatkal · Demo fares</span></header>
       <form id="journey-form">
         <label><span>From</span><input id="origin" list="rail-stations" autocomplete="off" placeholder="Station name or code" required></label>
         <label><span>To</span><input id="destination" list="rail-stations" autocomplete="off" placeholder="Station name or code" required></label>
@@ -61,16 +62,18 @@
       <button id="retry-timetable" class="text-button" type="button" hidden>Retry timetable</button>
     </section>
     <div class="request-rail" role="presentation"><i></i></div>
+    <nav class="flow-nav" id="flow-nav" hidden aria-label="Booking progress"><a href="#journey">Journey planner</a><span id="flow-progress"></span><span id="flow-clock"></span><button class="text-button" type="button" id="release-hold" hidden>Release seat and start again</button></nav>
     <div id="message" class="message" role="status" aria-live="polite" hidden></div>
     <div id="booking" class="booking-layout" hidden>
       <section class="panel trains-panel" aria-labelledby="trains-heading">
         <div class="section-heading"><div><p class="eyebrow">SEARCH RESULTS</p><h2 tabindex="-1" id="trains-heading">Available trains</h2></div><span id="train-count" class="subtle"></span></div>
         <div id="train-list" class="train-list" aria-label="Available demo trains"><p class="loading">Loading trains…</p></div>
-        <button id="reload" class="text-button" type="button">↻ Refresh availability</button>
+        <p id="railkit-results" hidden></p><button id="reload" class="text-button" type="button">↻ Refresh availability</button>
       </section>
       <section class="panel seats-panel" hidden aria-labelledby="seats-heading" aria-busy="true">
         <div class="section-heading"><div><p class="eyebrow">SEAT SELECTION</p><h2 tabindex="-1" id="seats-heading">Choose your seat</h2></div><span class="coach-badge">COACH S1</span></div>
         <p id="journey-label" class="subtle">Choose a train to see its seats.</p>
+        <div id="classes" class="class-options" aria-label="Travel class"></div>
         <div class="legend"><span><i class="free-dot"></i>Available</span><span><i class="held-dot"></i>Held</span><span><i class="sold-dot"></i>Sold</span></div>
         <div class="coach">
           <div class="coach-end"><span>← ENGINE</span><span>EXIT →</span></div>
@@ -84,9 +87,22 @@
         <p class="seat-help">Select an available seat to hold it for 5 minutes. Passenger sign-in is required to reserve a seat.</p>
       </section>
     </div>
+    <section class="panel flow-page" id="traveller" hidden>
+      <p class="eyebrow">PASSENGER DETAILS</p><h2 tabindex="-1">Who is travelling?</h2><p class="trip-summary"></p>
+      <form id="traveller-form" class="checkout-form">
+        <label>Passenger name<input name="name" required maxlength="80" autocomplete="off"></label>
+        <label>Age in years<input name="age" type="number" min="1" max="120" required></label>
+        <label>Gender<select name="gender" required><option value="">Choose</option><option>Female</option><option>Male</option><option>Other</option><option>Prefer not to say</option></select></label>
+        <label>Berth preference<select name="preference"><option>No preference</option><option>Lower</option><option>Middle</option><option>Upper</option><option>Side lower</option><option>Side upper</option></select></label>
+        <p class="subtle">Use fictional details for this demo. Berth preferences are requests.</p>
+        <button class="primary-button">Continue to payment →</button>
+      </form></section>
+    <section class="panel flow-page" id="payment" hidden><p class="eyebrow">DEMO WALLET</p><h2 tabindex="-1">Pay for your journey</h2><p class="trip-summary"></p>
+      <img id="pay-qr" width="200" height="200" alt="Scan to open the demo wallet"><p>Scan on a device that can reach this site, or pay here with demo funds.</p>
+      <button id="pay-now" class="primary-button">Pay with demo wallet</button><button id="check-paid" class="text-button">Retrieve paid ticket</button></section>
     <section id="ticket" class="ticket panel" aria-labelledby="ticket-title" tabindex="-1" hidden>
       <div class="ticket-main"><p class="eyebrow">YOU'RE ALL ABOARD</p><h2 id="ticket-title">Booking confirmed.</h2><p id="ticket-route"></p><p id="ticket-departure" class="subtle"></p><p class="subtle">Mock ticket · No payment collected · Not valid for travel</p></div>
-      <div class="ticket-stub"><span class="confirmed">CONFIRMED</span><p class="eyebrow">DEMO PNR</p><strong id="ticket-pnr"></strong><p>COACH S1 · SEAT <strong id="ticket-seat"></strong></p></div>
+      <div class="ticket-stub"><span class="confirmed">CONFIRMED</span><p class="eyebrow">DEMO PNR</p><strong id="ticket-pnr"></strong><p><span id="receipt-class"></span> · SEAT <strong id="ticket-seat"></strong></p></div>
     </section>
     <section id="guide" class="editorial reveal" aria-labelledby="guide-title">
       <header class="editorial-heading">
@@ -96,7 +112,7 @@
       <ol class="journey-stops">
         <li><h3>Find a departure</h3><p>Choose your stations and journey date. Each matching train shows its departure time in IST and how many seats are free.</p></li>
         <li><h3>Hold your seat</h3><p>Pick an available seat from the coach map. The five-minute timer shows how long that seat is reserved for you.</p></li>
-        <li><h3>Collect your ticket</h3><p>Confirm your hold and collect a demo PNR. If the reply disappears, your browser can retrieve the confirmation.</p></li>
+        <li><h3>Collect your ticket</h3><p>Enter traveller details, pay with demo funds and collect your PNR. If the reply disappears, your browser can retrieve the confirmation.</p></li>
       </ol>
     </section>
 
@@ -157,4 +173,3 @@
   <footer><a href="/jury/">Jury presentation ↗</a><span>TATKAL SHIELD <span class="footer-dot">●</span> A reliability experiment</span><span>College DevOps showcase &middot; Mock railway network</span></footer>
 </body>
 </html>
-

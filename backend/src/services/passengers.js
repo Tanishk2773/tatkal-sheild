@@ -105,7 +105,7 @@ export function mountPassengers(app, pool, { secureCookies = false } = {}) {
 
   app.get('/api/passenger/tickets', requirePassenger, async (req, res) => {
     const { rows } = await pool.query(
-      'SELECT b.pnr, b.seat_no, b.status, b.train_id, t.name, t.source, t.destination, t.departure FROM bookings b JOIN trains t ON t.id = b.train_id WHERE b.user_id = $1 ORDER BY b.id DESC',
+      'SELECT o.traveller, o.travel_class, o.fare, o.preference, b.pnr, b.seat_no, b.status, b.train_id, t.name, t.source, t.destination, t.departure FROM bookings b LEFT JOIN checkout_orders o ON o.id=b.checkout_id JOIN trains t ON t.id = b.train_id WHERE b.user_id = $1 ORDER BY b.id DESC',
       [req.passenger.id]
     );
     res.json({ tickets: rows });

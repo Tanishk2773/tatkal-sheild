@@ -4,16 +4,26 @@
   "private": true,
   "description": "Phase 1: a self-contained mock train booking app.",
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "start": "node --env-file-if-exists=.env backend/src/server.js",
     "dev": "node --watch --env-file-if-exists=.env backend/src/server.js",
     "test": "node --test backend/tests/*.test.js",
-    "check": "node --check backend/src/server.js && node --check backend/src/app.js && node --check backend/src/db.js && node --check backend/src/services/booking.js && node --check frontend/js/app.js"
+    "check": "node --check backend/src/server.js && node --check backend/src/app.js && node --check backend/src/db.js && node --check backend/src/services/booking.js && node --check frontend/js/app.js",
+    "test:browser": "node backend/ci/browser.js"
   },
   "dependencies": {
     "express": "^5.1.0",
     "pg": "^8.16.3",
-    "pg-mem": "^3.0.5"
+    "pg-mem": "^3.0.5",
+    "qrcode": "^1.5.4",
+    "railkit": "^6.0.4"
+  },
+  "devDependencies": {
+    "jsqr": "^1.4.0",
+    "playwright-core": "^1.65.1",
+    "pngjs": "^5.0.0"
   }
 }

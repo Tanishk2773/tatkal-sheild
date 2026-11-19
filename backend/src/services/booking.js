@@ -1,4 +1,5 @@
 // Keep booking rules separate from HTTP handlers so they are easy to explain.
+import { seatClass } from '../../../frontend/js/classes.js';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 
 export class BookingError extends Error {
@@ -83,7 +84,7 @@ export function createBookingService(pool, { holdSeconds = 300, now = () => Date
     return rows.length > 0;
   }
 
-  async function holdSeat({ trainId, seatNo, userId }) {
+  async function holdSeat({ trainId, seatNo, userId, checkoutRequired = false }) {
     return transaction(async client => {
       // A train row lock serializes Phase 1 writes in real PostgreSQL.
       // The in-memory emulator does not model PostgreSQL locking.
@@ -105,14 +106,29 @@ export function createBookingService(pool, { holdSeconds = 300, now = () => Date
       const expiresAt = new Date(now() + holdSeconds * 1000);
       await client.query('DELETE FROM seat_holds WHERE train_id = $1 AND seat_no = $2', [trainId, seatNo]);
       await client.query(
-        'INSERT INTO seat_holds (train_id, seat_no, user_id, hold_token, expires_at) VALUES ($1,$2,$3,$4,$5)',
-        [trainId, seatNo, userId, holdToken, expiresAt]
+        'INSERT INTO seat_holds (train_id, seat_no, user_id, hold_token, expires_at, checkout_required) VALUES ($1,$2,$3,$4,$5,$6)',
+        [trainId, seatNo, userId, holdToken, expiresAt, checkoutRequired]
       );
       return { trainId, seatNo, holdToken, expiresAt };
     });
   }
 
-  async function confirmBooking({ trainId, seatNo, userId, holdToken }) {
+  async function releaseHold({ trainId, seatNo, userId, holdToken }) {
+    return transaction(async client => {
+      await getTrain(client, trainId, true);
+      const { rows: [order] } = await client.query(
+        'SELECT payment_ref FROM checkout_orders WHERE hold_token=$1 AND user_id=$2', [holdToken, userId]
+      );
+      if (order?.payment_ref) throw new BookingError(409, 'Already paid. Retrieve your ticket.');
+      await client.query(
+        'DELETE FROM seat_holds WHERE train_id=$1 AND seat_no=$2 AND user_id=$3 AND hold_token=$4',
+        [trainId, seatNo, userId, holdToken]
+      );
+      return { released: true };
+    });
+  }
+
+  async function confirmBooking({ trainId, seatNo, userId, holdToken, checkoutId = null }) {
     return transaction(async client => {
       const train = await getTrain(client, trainId, true);
       checkSeat(train, seatNo);
@@ -133,19 +149,22 @@ export function createBookingService(pool, { holdSeconds = 300, now = () => Date
       if (hold.user_id !== userId || hold.hold_token !== holdToken) {
         throw new BookingError(403, 'This hold does not belong to your demo session.');
       }
+      const { rows: [order] } = await client.query('SELECT id FROM checkout_orders WHERE hold_token=$1', [holdToken]);
+      if ((hold.checkout_required && !checkoutId) || (order && order.id !== checkoutId)) throw new BookingError(409,'Finish the QR checkout first.');
       const pnr = 'TS-' + randomBytes(6).toString('hex').toUpperCase();
       const { rows } = await client.query(
-        'INSERT INTO bookings (train_id, seat_no, user_id, pnr, status, confirmation_key) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, pnr, seat_no, status, user_id, train_id, created_at',
-        [trainId, seatNo, userId, pnr, 'CONFIRMED', confirmationKey]
+        'INSERT INTO bookings (train_id, seat_no, user_id, pnr, status, confirmation_key, checkout_id) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, pnr, seat_no, status, user_id, train_id, created_at',
+        [trainId, seatNo, userId, pnr, 'CONFIRMED', confirmationKey, checkoutId]
       );
       await client.query('DELETE FROM seat_holds WHERE train_id = $1 AND seat_no = $2', [trainId, seatNo]);
+      if (checkoutId) await client.query('UPDATE checkout_orders SET payment_ref=$1 WHERE id=$2', [pnr,checkoutId]);
       return { booking: rows[0], train };
     });
   }
 
   async function manageTicket({ pnr, userId, seatNo, expectedSeat }) {
     return transaction(async client => {
-      const lookup = 'SELECT pnr, train_id, seat_no, status FROM bookings WHERE pnr = $1 AND user_id = $2';
+      const lookup = 'SELECT pnr, train_id, seat_no, status, checkout_id FROM bookings WHERE pnr = $1 AND user_id = $2';
       const { rows: [owned] } = await client.query(lookup, [pnr, userId]);
       if (!owned) throw new BookingError(404, 'Ticket not found.');
       const train = await getTrain(client, owned.train_id, true);
@@ -159,6 +178,7 @@ export function createBookingService(pool, { holdSeconds = 300, now = () => Date
 
       if (ticket.status !== 'CONFIRMED') throw new BookingError(409, 'This ticket is cancelled.');
       checkSeat(train, seatNo);
+      if (ticket.checkout_id && seatClass(seatNo).code !== seatClass(ticket.seat_no).code) throw new BookingError(400,'Choose a seat in the booked class.');
       if (ticket.seat_no === seatNo) return ticket;
       if (ticket.seat_no !== expectedSeat) throw new BookingError(409, 'The seat has changed. Reload your tickets and try again.');
       if (await isSold(client, train.id, seatNo)) throw new BookingError(409, 'This seat is already sold.');
@@ -173,5 +193,5 @@ export function createBookingService(pool, { holdSeconds = 300, now = () => Date
     });
   }
 
-  return { listTrains, listSeats, holdSeat, confirmBooking, manageTicket };
+  return { listTrains, listSeats, holdSeat, releaseHold, confirmBooking, manageTicket };
 }

@@ -1,0 +1,105 @@
+body[data-page]:not([data-page='home'])
+  main
+  > :is(.intro, .journey, .editorial, .journey-end) {
+  display: none;
+}
+body:not([data-page='results']):not([data-page='coach']) #booking,
+body:not([data-page='receipt']) #ticket,
+body[data-page='results'] .seats-panel,
+body[data-page='coach'] .trains-panel {
+  display: none;
+}
+#booking:not([hidden]) {
+  grid-template-columns: 1fr;
+}
+.flow-page,
+.flow-nav {
+  max-width: 850px;
+  margin: 2rem auto;
+}
+.flow-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.flow-nav a {
+  color: inherit;
+  text-underline-offset: 4px;
+}
+.flow-nav span,
+.trip-summary {
+  font-weight: 650;
+}
+.checkout-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr));
+  gap: 1.1rem;
+}
+.checkout-form label {
+  display: grid;
+  gap: 0.4rem;
+  font-weight: 650;
+}
+.checkout-form input,
+.checkout-form select {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #78988c;
+  border-radius: 8px;
+  padding: 0.8rem;
+  font: inherit;
+  background: #fff;
+  color: #18332e;
+}
+.class-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+.class-choice {
+  border: 1px solid #76978b;
+  background: white;
+  color: #18332e;
+  border-radius: 0.6rem;
+  padding: 0.7rem;
+  cursor: pointer;
+  font: inherit;
+}
+.class-choice[aria-pressed='true'] {
+  background: #18332e;
+  color: white;
+}
+.class-choice:disabled {
+  opacity: 0.65;
+}
+#pay-qr {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid #ccc;
+  border-radius: 0.6rem;
+}
+.flow-page[hidden],
+.flow-nav[hidden] {
+  display: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .flow-page:not([hidden]),
+  body[data-page='coach'] .seats-panel,
+  body[data-page='results'] .trains-panel {
+    animation: step-enter 0.28s ease-out;
+  }
+  @keyframes step-enter {
+    from {
+      opacity: 0.2;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}

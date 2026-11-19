@@ -44,8 +44,8 @@ Press **Ctrl+C** in the terminal to stop the server. Run `npm start` from the sa
 
 1. In the Operations Lab, enable **Drop the next confirmation reply**.
 2. Search **CSMT → MAO** on the suggested demo date, choose a train and select an available seat.
-3. Create a passenger account or sign in. Confirm the five-minute hold.
-4. Refresh the same browser tab and choose **Retrieve confirmation**. Open **My account → My tickets** to see the PNR.
+3. Create a passenger account or sign in. Choose a class, enter fictional passenger details and pay with the demo wallet while the five-minute hold is active.
+4. Refresh the same browser tab and choose **Retrieve paid ticket**. Open **My account → My tickets** to see the PNR.
 
 ## What the project contains
 
@@ -60,6 +60,16 @@ Press **Ctrl+C** in the terminal to stop the server. Run `npm start` from the sa
 | Jury materials | The companion presentation is served at `/jury/`. Both narrated MP4 films are bundled with the app. |
 
 Station names and codes are reference data. Schedules, inventories and tickets are simulated. The project has no live RailOne booking integration.
+
+## Classes and QR checkout
+
+Each search opens a results view. Choose a train, compare the four class fares, and select a free seat. The passenger account owns the ticket. The traveller form records the rider’s name, age, gender and berth preference. The server prices the order and issues one demo PNR per paid hold, including on retry.
+
+The QR opens a browser-based demo wallet. On one computer, use **Pay with demo wallet** directly. For a phone demonstration, bind the server to a reachable interface and set `PUBLIC_ORIGIN` to the reachable site origin before starting. A phone cannot reach a computer through its loopback address.
+
+Set the optional server-side `RAILKIT_API_KEY` for RailKit station-pair timetable references alongside simulated search results. The three bundled YouPI skill documents cover an Android gateway, a banking observer and a security audit. They are integration references. The running wallet uses demo funds. The supplied YouPI guide requires merchant credentials and manual bank verification for real settlement. [Integration references](docs/integrations)
+
+Run the HTTP and database tests with `npm test`. To exercise the booking screens at desktop and mobile widths, run `npx playwright-core install chromium`, then `npm run test:browser`. The browser suite starts an isolated demo database and decodes the payment QR.
 
 ## How a change reaches staging
 

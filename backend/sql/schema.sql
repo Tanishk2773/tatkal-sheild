@@ -57,3 +57,22 @@ CREATE TABLE IF NOT EXISTS passenger_sessions (
   passenger_id TEXT NOT NULL REFERENCES passengers(id) ON DELETE CASCADE,
   expires_at TIMESTAMPTZ NOT NULL
 );
+
+ALTER TABLE seat_holds ADD COLUMN IF NOT EXISTS checkout_required BOOLEAN NOT NULL DEFAULT FALSE;
+
+CREATE TABLE IF NOT EXISTS checkout_orders (
+  id TEXT PRIMARY KEY,
+  hold_token TEXT NOT NULL UNIQUE,
+  user_id TEXT NOT NULL,
+  train_id INTEGER NOT NULL REFERENCES trains(id),
+  seat_no INTEGER NOT NULL,
+  travel_class TEXT NOT NULL,
+  fare INTEGER NOT NULL,
+  traveller TEXT NOT NULL,
+  age INTEGER NOT NULL,
+  gender TEXT NOT NULL,
+  preference TEXT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  payment_ref TEXT UNIQUE
+);
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS checkout_id TEXT REFERENCES checkout_orders(id);

@@ -1,4 +1,5 @@
 // Express serves the API and the buildless frontend from one local origin.
+import { mountCheckout } from './checkout.js';
 import express from 'express';
 import { mountPassengers } from './services/passengers.js';
 import { fileURLToPath } from 'node:url';
@@ -40,6 +41,16 @@ export function createApp(database, options = {}) {
   });
   const requirePassenger = mountPassengers(app, database.pool, options);
 
+  mountCheckout(app, database.pool, requirePassenger, service);
+  app.get('/api/railkit/search', async (req, res) => {
+    if (!process.env.RAILKIT_API_KEY) return res.json({ enabled: false });
+    const { from, to } = req.query;
+    if (![from,to].every(code => typeof code === 'string' && /^[A-Z0-9]{1,6}$/.test(code))) throw new BookingError(400,'Choose valid station codes.');
+    const sdk = await import('railkit');
+    sdk.configure(process.env.RAILKIT_API_KEY);
+    const result = await sdk.searchTrainBetweenStations(from,to);
+    res.json({enabled:true, result});
+  });
   app.get('/api/health', async (_req, res) => {
     await database.pool.query('SELECT 1');
     res.json({ status: 'ok', phase: 1, storage: database.mode });
@@ -50,7 +61,10 @@ export function createApp(database, options = {}) {
     res.json(await service.listSeats(positiveInteger(Number(req.params.id), 'trainId')));
   });
   app.post('/api/seats/hold', requirePassenger, async (req, res) => {
-    res.status(201).json(await service.holdSeat(seatRequest(req.body, req.passenger.id)));
+    res.status(201).json(await service.holdSeat({...seatRequest(req.body, req.passenger.id), checkoutRequired:req.body.checkoutRequired === true}));
+  });
+  app.post('/api/seats/release', requirePassenger, async (req, res) => {
+    res.json(await service.releaseHold(seatRequest(req.body, req.passenger.id, true)));
   });
   app.post('/api/bookings/confirm', requirePassenger, async (req, res) => {
     const result = await service.confirmBooking(seatRequest(req.body, req.passenger.id, true));

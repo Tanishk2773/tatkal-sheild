@@ -192,3 +192,45 @@ test('passenger can change and cancel their own ticket and free inventory', asyn
   const history = await send('/api/passenger/tickets', undefined, owner.cookie);
   assert.equal(history.body.tickets[0].status, 'CANCELLED');
 });
+
+test('QR wallet checkout binds fare, traveller, ownership and class to a single ticket', async t => {
+  const { send, request, page } = await setup(t);
+  const account = await send('/api/passenger/register',{name:'Test rider',email:'rider@example.test',password:'passphrase-123'});
+  const hold = (await send('/api/seats/hold',{trainId:1,seatNo:13},account.cookie)).body;
+  const details = {holdToken:hold.holdToken,name:'Test Rider',age:25,gender:'Other',preference:'Lower',fare:1};
+  assert.equal((await send('/api/checkout',details)).status,401);
+  assert.equal((await request('/api/checkout',{...details,userId:'other-user'})).status,410);
+  assert.equal((await send('/api/checkout',{...details,age:-3},account.cookie)).status,400);
+  const order = await send('/api/checkout',details,account.cookie);
+  assert.equal(order.status,200);
+  const path = '/api/checkout/'+order.body.id;
+  const before = (await send(path)).body;
+  assert.equal(before.fare,840);
+  assert.equal(before.travelClass,'3A');
+  assert.equal(before.paid,false);
+  assert.equal((await page(path+'/qr')).headers.get('content-type'),'image/png');
+  assert.equal((await page('/wallet.html')).status,200);
+  assert.equal((await send('/api/bookings/confirm',hold,account.cookie)).status,409);
+  for (let i=0;i<2;i++) assert.equal((await send(path+'/demo-pay',{})).status,200);
+  assert.equal((await send(path)).body.paid,true);
+  const ticket = (await send('/api/bookings/confirm',hold,account.cookie)).body.booking;
+  assert.ok(ticket.pnr);
+  const history = await send('/api/passenger/tickets',undefined,account.cookie);
+  assert.equal(history.body.tickets.length,1);
+  assert.equal(history.body.tickets[0].traveller,'Test Rider');
+  assert.equal((await send('/api/bookings/'+ticket.pnr+'/change-seat',{expectedSeat:13,seatNo:1},account.cookie)).status,400);
+});
+
+test('released and expired wallet orders cannot issue tickets', async t => {
+  const { send, database } = await setup(t);
+  const account = await send('/api/passenger/register',{name:'Test Rider',email:'expire@example.test',password:'passphrase-123'});
+  for (const expired of [false,true]) {
+    const hold = (await send('/api/seats/hold',{trainId:1,seatNo:2,checkoutRequired:true},account.cookie)).body;
+    assert.equal((await send('/api/bookings/confirm',hold,account.cookie)).status,409);
+    const details = {holdToken:hold.holdToken,name:'Demo',age:30,gender:'Male',preference:'Upper'};
+    const order = (await send('/api/checkout',details,account.cookie)).body;
+    if (expired) await database.pool.query('UPDATE seat_holds SET expires_at=$1 WHERE hold_token=$2',[new Date(0),hold.holdToken]);
+    else assert.equal((await send('/api/seats/release',hold,account.cookie)).status,200);
+    assert.equal((await send('/api/checkout/'+order.id+'/demo-pay',{})).status,410);
+  }
+});
